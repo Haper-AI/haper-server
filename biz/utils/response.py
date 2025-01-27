@@ -1,11 +1,7 @@
 import time
 from enum import IntEnum
 from flask import jsonify
-import logging
-from .env import RuntimeEnv
-
-logger = logging.getLogger(RuntimeEnv.Instance().APP_NAME)
-
+from .logger import logger
 
 class ResponseCode(IntEnum):
     SUCCESS = 0

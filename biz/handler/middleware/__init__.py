@@ -6,6 +6,7 @@ from flask import request
 from pydantic import ValidationError
 from biz.utils.env import RuntimeEnv
 from biz.utils.response import HTTPResponse, SError, ResponseCode
+from biz.utils.logger import logger
 
 
 class RequestContext:
@@ -64,7 +65,7 @@ def catch_error(f):
             # TODO: catch other type of Exception like from db, s3, mq, etc.
             exc_type, exc_obj, exc_tb = sys.exc_info()
             fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)
-            print(exc_type, fname, exc_tb.tb_lineno)
+            logger.error(exc_type, fname, exc_tb.tb_lineno)
             resp.set_error(ResponseCode.InternalUnknownError.create_error(str(e)))
             return resp.return_with_log()
 

@@ -3,3 +3,5 @@ python-dotenv~=1.0.1
 pydantic~=2.10.6
 pydantic[email]~=2.10.6
 PyJWT~=2.10.1
+sqlalchemy~=2.0.37
+psycopg2-binary==2.9.9
