@@ -10,8 +10,8 @@ app = Flask(RuntimeEnv.Instance().APP_NAME)
 def ping():
     return "pong"
 
+app.register_blueprint(api_v1)
+init_dependent_services()
 
 if __name__ == "__main__":
-    app.register_blueprint(api_v1)
-    init_dependent_services()
     app.run(debug=True, host="0.0.0.0", port=8888)

@@ -21,6 +21,6 @@ class RuntimeEnv:
     def __init__(self):
         self.APP_NAME = os.getenv("APP_NAME")
         self.JWT_SECRET = os.getenv("JWT_SECRET")
-        self.JWT_HEADER = os.getenv("JWT_HEADER")
+        self.JWT_COOKIE_NAME = os.getenv("JWT_COOKIE_NAME")
         self.LOG_LEVEL = os.getenv("LOG_LEVEL")
         self.POSTGRES_DSN = os.getenv("POSTGRES_DSN")
