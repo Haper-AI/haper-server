@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import (
     Column,
     String,
@@ -8,12 +10,12 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Session
-import datetime
 
-Base = declarative_base()
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Session, make_transient
+import datetime
+from .base import Base
+
 
 
 class User(Base):
@@ -24,6 +26,7 @@ class User(Base):
         UUID,
         primary_key=True,
         nullable=False,
+        default=lambda: str(uuid.uuid4()),
         comment='Primary key of the users table'
     )
     name = Column(
@@ -52,32 +55,52 @@ class User(Base):
     created_at = Column(
         TIMESTAMP,
         nullable=False,
-        default=datetime.datetime.now(datetime.UTC),
+        default=datetime.datetime.now(datetime.timezone.utc),
         comment='UTC timestamp when the user was created'
     )
 
     @classmethod
-    def get_user_by_id(cls, user_id, session: Session):
+    def add(cls, session: Session, name: str, email: str, password: str):
+        user = cls(name=name, email=email, password=password)
+        session.add(user)
+        session.flush()
+        make_transient(user)
+        return user
+
+
+    @classmethod
+    def get_user_by_id(cls, session: Session, user_id: str):
         """
         Fetch a user by their ID from the database.
 
-        :param user_id: UUID of the user to fetch
         :param session: SQLAlchemy session instance
+        :param user_id: UUID of the user to fetch
         :return: User object or None if not found
         """
         return session.query(cls).filter(cls.id == user_id).first()
+
+    @classmethod
+    def get_user_by_email(cls, session: Session, email: str):
+        """
+        Fetch a user by their email from the database.
+
+        :param session: SQLAlchemy session instance
+        :param email: UUID of the user to fetch
+        :return: User object or None if not found
+        """
+        return session.query(cls).filter(cls.email == email).first()
 
 
 class Account(Base):
     __tablename__ = 'accounts'
     __table_args__ = (
-        UniqueConstraint('user_id', 'provider_account_id', name='user_provider_account_uc'),
         {'comment': 'User OAuth accounts, one user can have multiple accounts'}
     )
 
     user_id = Column(
         UUID,
         ForeignKey('users.id', ondelete="CASCADE"), nullable=False,
+        primary_key=True,
         comment='The id of users table record'
     )
     provider = Column(
@@ -88,6 +111,7 @@ class Account(Base):
     provider_account_id = Column(
         Text,
         nullable=False,
+        primary_key=True,
         comment='The unique account ID of the user for the provider'
     )
     email = Column(
@@ -110,6 +134,6 @@ class Account(Base):
     created_at = Column(
         TIMESTAMP,
         nullable=False,
-        default=datetime.datetime.now(datetime.UTC),
+        default=datetime.datetime.now(datetime.timezone.utc),
         comment='UTC timestamp when the account was created'
     )

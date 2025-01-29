@@ -1,31 +1,53 @@
 from flask import request
+from pydantic import BaseModel, EmailStr, PositiveInt, Field, AfterValidator, model_validator
+from typing import Optional
 from typing_extensions import Annotated
-from pydantic import BaseModel, EmailStr, Field, AfterValidator, ValidationError
 from biz.handler.middleware import catch_error
 from biz.utils.response import HTTPResponse
+from biz.controller.user import (
+    signup_user_by_credential,
+    signup_user_by_oauth,
+    login_user_with_credential,
+    login_user_by_oauth,
+)
 from .routes import user_routes
 
 
-def validate_password(value):
-    if not any(char.isalpha() for char in value):
-        raise ValueError("Password must contain at least one letter.")
-    if not any(char.isdigit() for char in value):
-        raise ValueError("Password must contain at least one number.")
-    return value
-
-
 class SignupReq(BaseModel):
-    email: EmailStr
-    password: Annotated[
+    """Signup request"""
+    provider: Annotated[
         str,
-        Field(
-            ...,
-            min_length=8,
-            max_length=64,
-            description="Password must contain at least one letter, one number, and be 8-128 characters long.",
-        ),
-        AfterValidator(validate_password)
+        Field(..., description="Provider field cannot be empty.")
     ]
+    email: EmailStr
+    password: Optional[str] = None
+    provider_account_id: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    expires_at: Optional[PositiveInt] = None
+
+    @model_validator(mode='after')
+    def validate_req(self):
+        if self.provider == 'credential':
+            # validate password
+            if not self.password:
+                raise ValueError("Password cannot be empty.")
+            if len(self.password) < 8:
+                raise ValueError("Password must be at least 8 characters long.")
+            if len(self.password) > 32:
+                raise ValueError("Password must be at most 32 characters long.")
+            if not any(char.isalpha() for char in self.password):
+                raise ValueError("Password must contain at least one letter.")
+            if not any(char.isdigit() for char in self.password):
+                raise ValueError("Password must contain at least one number.")
+        else:  # else user sign up with oauth
+            # require provider_account_id for oauth
+            if not self.provider_account_id:
+                raise ValueError("Provider account id cannot be empty.")
+            # require access_token for oauth
+            if not self.access_token:
+                raise ValueError("Access token cannot be empty.")
+        return self
 
 
 @user_routes.route('/signup', methods=['POST'])
@@ -33,13 +55,72 @@ class SignupReq(BaseModel):
 def signup():
     resp = HTTPResponse(request.path)
     req = SignupReq(**request.get_json())
+    if req.provider == 'credential':
+        user = signup_user_by_credential(str(req.email), req.password)
+    else:
+        user = signup_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
+                                    req.access_token, req.refresh_token, req.expires_at)
+
     resp.set_data({
-        "email": req.email,
-        "password": req.password,
+        'user': {
+            'id': user.id,
+            'name': user.name,
+            'image': user.image,
+            'email': user.email,
+            'email_verified': user.email_verified,
+            'created_at': user.created_at,
+        }
     })
     return resp.return_with_log()
 
 
+class LoginReq(BaseModel):
+    """Login request"""
+    provider: Annotated[
+        str,
+        Field(..., description="Provider field cannot be empty.")
+    ]
+    email: EmailStr
+    password: Optional[str] = None
+    provider_account_id: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    expires_at: Optional[PositiveInt] = None
+
+    @model_validator(mode='after')
+    def validate_req(self):
+        if self.provider == 'credential':
+            # validate password
+            if not self.password:
+                raise ValueError("Password cannot be empty.")
+        else:  # else user sign up with oauth
+            # require provider_account_id for oauth
+            if not self.provider_account_id:
+                raise ValueError("Provider account id cannot be empty.")
+            # require access_token for oauth
+            if not self.access_token:
+                raise ValueError("Access token cannot be empty.")
+        return self
+
+
 @user_routes.route('/login', methods=['POST'])
 def login():
-    raise NotImplementedError
+    resp = HTTPResponse(request.path)
+    req = LoginReq(**request.get_json())
+    if req.provider == 'credential':
+        user = login_user_with_credential(str(req.email), req.password)
+    else:
+        user = login_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
+                                   req.access_token, req.refresh_token, req.expires_at)
+
+    resp.set_data({
+        user: {
+            'id': user.id,
+            'name': user.name,
+            'image': user.image,
+            'email': user.email,
+            'email_verified': user.email_verified,
+            'created_at': user.created_at,
+        }
+    })
+    return resp.return_with_log()
