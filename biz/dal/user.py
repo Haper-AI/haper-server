@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 
 from sqlalchemy import (
     Column,
@@ -15,7 +16,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session, make_transient
 import datetime
 from .base import Base
-
 
 
 class User(Base):
@@ -60,16 +60,16 @@ class User(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, name: str, email: str, password: str):
-        user = cls(name=name, email=email, password=password)
+    def add(cls, session: Session, name: str, email: str, email_verified: bool = False,
+            password: Optional[str] = None, image: Optional[str] = None):
+        user = cls(name=name, email=email, email_verified=email_verified, password=password, image=image)
         session.add(user)
         session.flush()
         make_transient(user)
         return user
 
-
     @classmethod
-    def get_user_by_id(cls, session: Session, user_id: str):
+    def get_by_id(cls, session: Session, user_id: str):
         """
         Fetch a user by their ID from the database.
 
@@ -80,7 +80,7 @@ class User(Base):
         return session.query(cls).filter(cls.id == user_id).first()
 
     @classmethod
-    def get_user_by_email(cls, session: Session, email: str):
+    def get_by_email(cls, session: Session, email: str):
         """
         Fetch a user by their email from the database.
 
@@ -99,19 +99,20 @@ class Account(Base):
 
     user_id = Column(
         UUID,
-        ForeignKey('users.id', ondelete="CASCADE"), nullable=False,
-        primary_key=True,
+        ForeignKey('users.id', ondelete="CASCADE"),
+        nullable=False,
         comment='The id of users table record'
     )
     provider = Column(
         String(16),
+        primary_key=True,
         nullable=False,
         comment='The OAuth provider, like google, discord, etc.'
     )
     provider_account_id = Column(
         Text,
-        nullable=False,
         primary_key=True,
+        nullable=False,
         comment='The unique account ID of the user for the provider'
     )
     email = Column(
@@ -137,3 +138,24 @@ class Account(Base):
         default=datetime.datetime.now(datetime.timezone.utc),
         comment='UTC timestamp when the account was created'
     )
+
+    @classmethod
+    def add(cls, session: Session, user_id: str, provider: str, provider_account_id: str, email: str,
+            access_token: str, refresh_token: str, expires_at: int):
+        account = cls(
+            user_id=user_id,
+            provider=provider,
+            provider_account_id=provider_account_id,
+            email=email,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_at=expires_at
+        )
+        session.add(account)
+        session.flush()
+        make_transient(account)
+        return account
+
+    @classmethod
+    def get_by_provider_and_provider_id(cls, session: Session, provider: str, provider_account_id: str):
+        return session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).first()

@@ -11,7 +11,7 @@ postgresql_noproc = factories.postgresql_noproc(
     user="root",
     host="localhost",
     password="123456",
-    dbname="tests-haper",
+    dbname="tests-haper-unit",
 )
 postgresql = factories.postgresql("postgresql_noproc")
 

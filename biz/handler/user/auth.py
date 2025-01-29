@@ -25,6 +25,8 @@ class SignupReq(BaseModel):
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     expires_at: Optional[PositiveInt] = None
+    name: Optional[str] = None
+    image: Optional[str] = None
 
     @model_validator(mode='after')
     def validate_req(self):
@@ -58,8 +60,9 @@ def signup():
     if req.provider == 'credential':
         user = signup_user_by_credential(str(req.email), req.password)
     else:
-        user = signup_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
-                                    req.access_token, req.refresh_token, req.expires_at)
+        user, _ = signup_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
+                                       req.access_token, req.refresh_token, req.expires_at,
+                                       req.name, req.image)
 
     resp.set_data({
         'user': {
@@ -104,6 +107,7 @@ class LoginReq(BaseModel):
 
 
 @user_routes.route('/login', methods=['POST'])
+@catch_error
 def login():
     resp = HTTPResponse(request.path)
     req = LoginReq(**request.get_json())
@@ -114,7 +118,7 @@ def login():
                                    req.access_token, req.refresh_token, req.expires_at)
 
     resp.set_data({
-        user: {
+        'user': {
             'id': user.id,
             'name': user.name,
             'image': user.image,
