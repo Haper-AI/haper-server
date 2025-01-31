@@ -1,5 +1,4 @@
 import pytest
-from pytest_postgresql import factories
 from pytest_postgresql.janitor import DatabaseJanitor
 from flask import Flask
 from biz.utils.env import RuntimeEnv
@@ -9,7 +8,6 @@ from biz.dal.base import Base
 
 
 def new_handler_test_conf(scope, db_name: str):
-
     @pytest.fixture(scope=scope)
     def app():
         user = "root"
