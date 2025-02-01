@@ -1,0 +1,46 @@
+name: Build Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        description: image tag name, default will be commit id
+        required: false
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        description: image tag name, default will be commit id
+        required: false
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up image tag
+      - name: Set Default Tag
+        run: |
+          if [ -z "${{ inputs.tag }}" ]; then
+            echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
+          fi
+
+      # Step 3: Log into github container registry
+      - name: Log in to CR
+        run: echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u "${{ secrets.CR_USERNAME }}" --password-stdin
+
+      # Step 4: Build docker images
+      - name: Build docker images
+        run: docker build -t ghcr.io/${{ github.repository_owner }}/haper-server:${{ env.IMAGE_TAG }} .
+
+      # Step 5: Upload Coverage to Codecov
+      - name: Push Docker Image
+        run: docker push ghcr.io/${{ github.repository_owner }}/haper-server:${{ env.IMAGE_TAG }}

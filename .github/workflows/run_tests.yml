@@ -2,10 +2,13 @@ name: Run Pytest with Coverage
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
     branches:
       - 'main' # run code coverage only for main, release and dev
       - 'release/**/*'
       - 'dev/**/*'
+  workflow_call:
+
 
 jobs:
   test:
@@ -36,7 +39,7 @@ jobs:
     steps:
       # Step 1: Checkout the code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Step 2: Set up Python environment
       - name: Set up Python 3.9
