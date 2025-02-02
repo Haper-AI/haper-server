@@ -5,6 +5,7 @@ from typing import Optional
 import jwt
 from flask import request
 from pydantic import ValidationError
+from werkzeug.exceptions import UnsupportedMediaType
 
 from biz.utils.env import RuntimeEnv
 from biz.utils.logger import logger
@@ -97,6 +98,9 @@ def catch_error(f):
             return f(*args, **kwargs)
         except SError as e:
             resp.set_error(e)
+            return resp.return_with_log()
+        except UnsupportedMediaType as e:
+            resp.set_error(ResponseCode.InvalidParam.create_error(str(e)))
             return resp.return_with_log()
         except ValidationError as e:
             # Handle pydantic validation errors and return appropriate response

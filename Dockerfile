@@ -1,6 +1,8 @@
 # Use official Python image as a base
 FROM python:3.9-slim
 
+RUN apt update && apt install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Set work directory
 WORKDIR /app/haper-server
 
