@@ -61,8 +61,8 @@ def signup():
         user = signup_user_by_credential(str(req.email), req.password)
     else:
         user, _ = signup_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
-                                       req.access_token, req.refresh_token, req.expires_at,
-                                       req.name, req.image)
+                                    req.access_token, req.refresh_token, req.expires_at,
+                                    req.name, req.image)
 
     resp.set_data({
         'user': {
@@ -114,8 +114,10 @@ def login():
     if req.provider == 'credential':
         user = login_user_with_credential(str(req.email), req.password)
     else:
-        user = login_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
-                                   req.access_token, req.refresh_token, req.expires_at)
+        user = login_user_by_oauth(
+            req.provider, req.provider_account_id,
+            req.access_token, req.refresh_token, req.expires_at
+        )
 
     resp.set_data({
         'user': {

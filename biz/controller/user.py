@@ -8,6 +8,7 @@ from biz.service.db import get_session
 from biz.dal.user import User, Account
 from biz.utils.response import ResponseCode
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
+from sqlalchemy.orm import make_transient
 
 email_to_name = lambda email: email.split('@')[0]
 
@@ -43,6 +44,7 @@ def signup_user_by_credential(email: str, password: str):
         hashed_password = hash_password(password)
 
         user = User.add(session, name, email, password=hashed_password)
+        make_transient(user)
     return user
 
 
@@ -59,7 +61,7 @@ def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
         user = User.add(session, name, email, email_verified=True, image=image)
         account = Account.add(session, user.id, provider, provider_account_id,
                               email, access_token, refresh_token, expires_at)
-
+        make_transient(user), make_transient(account)
     return user, account
 
 
@@ -80,7 +82,20 @@ def login_user_with_credential(email: str, password: str):
     return user
 
 
-def login_user_by_oauth(provider: str, provider_account_id: str, email: str,
+def login_user_by_oauth(provider: str, provider_account_id: str,
                         access_token: str, refresh_token: Optional[str],
                         expires_at: Optional[int]):
-    raise NotImplementedError
+    with get_session(write=True) as session:
+        account = Account.get_by_provider_and_provider_id(session, provider, provider_account_id)
+        if not account:
+            raise ResponseCode.InvalidParam.create_error(f"{provider} account not registered.")
+
+        user = User.get_by_id(session, account.user_id)
+        if not user:
+            raise ResponseCode.InternalUnknownError.create_error(f"user not found for account {provider_account_id}")
+
+        # update account
+        Account.update_tokens(session, provider, provider_account_id, access_token, refresh_token, expires_at)
+
+        make_transient(user)
+    return user

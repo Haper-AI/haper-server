@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Session, make_transient
+from sqlalchemy.orm import Session
 import datetime
 from .base import Base
 
@@ -65,7 +65,6 @@ class User(Base):
         user = cls(name=name, email=email, email_verified=email_verified, password=password, image=image)
         session.add(user)
         session.flush()
-        make_transient(user)
         return user
 
     @classmethod
@@ -153,9 +152,22 @@ class Account(Base):
         )
         session.add(account)
         session.flush()
-        make_transient(account)
         return account
 
     @classmethod
     def get_by_provider_and_provider_id(cls, session: Session, provider: str, provider_account_id: str):
         return session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).first()
+
+    @classmethod
+    def update_tokens(cls, session: Session, provider: str, provider_account_id: str,
+                      access_token: str, refresh_token: Optional[str], expires_at: Optional[str]):
+        updates = {
+            'access_token': access_token,
+        }
+
+        if refresh_token:
+            updates['refresh_token'] = refresh_token
+        if expires_at:
+            updates['expires_at'] = expires_at
+
+        session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).update(updates)
