@@ -38,7 +38,7 @@ class User(Base):
         comment='The portrait URL of the user'
     )
     email = Column(
-        String(32),
+        String(128),
         nullable=False,
         unique=True,
         comment='The email address of the user, must be unique'

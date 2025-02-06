@@ -1,5 +1,6 @@
 import base64
 import os
+import requests
 from typing import Optional
 
 from cryptography.exceptions import InvalidKey
@@ -29,6 +30,15 @@ def compare_password(hashed_password: str, password: str) -> bool:
     except InvalidKey:
         return False
 
+def validate_oauth_token(provider: str, access_token: str) -> bool:
+    if provider == 'google':
+        url = f'https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={access_token}'
+        response = requests.get(url)
+        if response.status_code != 200:
+            return False
+        data = response.json()
+        return data.get('email') is not None
+    return False
 
 def signup_user_by_credential(email: str, password: str):
     # check user registered or not
@@ -52,6 +62,9 @@ def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
                          access_token: str, refresh_token: Optional[str], expires_at: Optional[int],
                          name: Optional[str], image: Optional[str]):
     with get_session(write=True) as session:
+        if not validate_oauth_token(provider, access_token):
+            raise ResponseCode.InvalidAuth.create_error("Invalid or expired OAuth token.")
+
         account = Account.get_by_provider_and_provider_id(session, provider, provider_account_id)
         if account:
             raise ResponseCode.InvalidParam.create_error(f"{provider} account already registered.")
@@ -86,6 +99,9 @@ def login_user_by_oauth(provider: str, provider_account_id: str,
                         access_token: str, refresh_token: Optional[str],
                         expires_at: Optional[int]):
     with get_session(write=True) as session:
+        if not validate_oauth_token(provider, access_token):
+            raise ResponseCode.InvalidAuth.create_error("Invalid or expired OAuth token.")
+
         account = Account.get_by_provider_and_provider_id(session, provider, provider_account_id)
         if not account:
             raise ResponseCode.InvalidParam.create_error(f"{provider} account not registered.")
