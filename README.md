@@ -22,8 +22,8 @@ To get started, ensure you have the following installed:
 1. This project use python-dotenv to load runtime envs. First create your own .env file to the root of this project
    ```text
    APP_NAME=haper
-   JWT_SECRET=<your own secret for signing jwt token>
-   JWT_COOKIE_NAME=<the cookie name for the jwt token>
+   JWT_AUTH_SECRET=<your own secret for signing jwt token>
+   JWT_AUTH_COOKIE_NAME=<the cookie name for the jwt token>
    LOG_LEVEL=<log level, DEBUG for test, INFO for production>
    POSTGRES_DSN=<your postgresql db dsn>
    ```

@@ -31,8 +31,8 @@ jobs:
     env:
       # Set environment just like the .env file
       APP_NAME: haper
-      JWT_SECRET: haper-jwt-secret-ci-test
-      JWT_COOKIE_NAME: x-haper-auth
+      JWT_AUTH_SECRET: haper-jwt-secret-ci-test
+      JWT_AUTH_COOKIE_NAME: x-haper-auth
       LOG_LEVEL: DEBUG
       POSTGRES_DSN: "" # doesn't have to set up this env as it will be replaced during pytest fixture code
 

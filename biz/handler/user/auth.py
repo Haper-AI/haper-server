@@ -2,7 +2,7 @@ from flask import request
 from pydantic import BaseModel, EmailStr, PositiveInt, Field, AfterValidator, model_validator
 from typing import Optional
 from typing_extensions import Annotated
-from biz.handler.middleware import catch_error
+from biz.handler.middleware import catch_error, gen_jwt_auth
 from biz.utils.response import HTTPResponse
 from biz.controller.user import (
     signup_user_by_credential,
@@ -11,6 +11,8 @@ from biz.controller.user import (
     login_user_by_oauth,
 )
 from .routes import user_routes
+
+CREDENTIALS_PROVIDER = 'credentials'
 
 
 class SignupReq(BaseModel):
@@ -30,7 +32,7 @@ class SignupReq(BaseModel):
 
     @model_validator(mode='after')
     def validate_req(self):
-        if self.provider == 'credential':
+        if self.provider == CREDENTIALS_PROVIDER:
             # validate password
             if not self.password:
                 raise ValueError("Password cannot be empty.")
@@ -55,14 +57,14 @@ class SignupReq(BaseModel):
 @user_routes.route('/signup', methods=['POST'])
 @catch_error
 def signup():
-    resp = HTTPResponse(request.path)
+    resp = HTTPResponse(request.method, request.path)
     req = SignupReq(**request.get_json())
-    if req.provider == 'credential':
+    if req.provider == CREDENTIALS_PROVIDER:
         user = signup_user_by_credential(str(req.email), req.password)
     else:
         user, _ = signup_user_by_oauth(req.provider, req.provider_account_id, str(req.email),
-                                    req.access_token, req.refresh_token, req.expires_at,
-                                    req.name, req.image)
+                                       req.access_token, req.refresh_token, req.expires_at,
+                                       req.name, req.image)
 
     resp.set_data({
         'user': {
@@ -74,6 +76,7 @@ def signup():
             'created_at': user.created_at,
         }
     })
+    resp.set_jwt_auth_cookie(gen_jwt_auth(str(user.id)))
     return resp.return_with_log()
 
 
@@ -92,7 +95,7 @@ class LoginReq(BaseModel):
 
     @model_validator(mode='after')
     def validate_req(self):
-        if self.provider == 'credential':
+        if self.provider == CREDENTIALS_PROVIDER:
             # validate password
             if not self.password:
                 raise ValueError("Password cannot be empty.")
@@ -109,9 +112,9 @@ class LoginReq(BaseModel):
 @user_routes.route('/login', methods=['POST'])
 @catch_error
 def login():
-    resp = HTTPResponse(request.path)
+    resp = HTTPResponse(request.method, request.path)
     req = LoginReq(**request.get_json())
-    if req.provider == 'credential':
+    if req.provider == CREDENTIALS_PROVIDER:
         user = login_user_with_credential(str(req.email), req.password)
     else:
         user = login_user_by_oauth(
@@ -129,4 +132,5 @@ def login():
             'created_at': user.created_at,
         }
     })
+    resp.set_jwt_auth_cookie(gen_jwt_auth(str(user.id)))
     return resp.return_with_log()

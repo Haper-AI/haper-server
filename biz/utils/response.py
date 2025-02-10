@@ -1,7 +1,10 @@
 import time
 from enum import IntEnum
-from flask import jsonify
+from flask import jsonify, make_response
+
+from .env import RuntimeEnv
 from .logger import logger
+
 
 class ResponseCode(IntEnum):
     SUCCESS = 0
@@ -23,10 +26,12 @@ class SError(Exception):
 
 class HTTPResponse:
 
-    def __init__(self, uri: str = ''):
+    def __init__(self, method: str, uri: str):
+        self.cookie_response = make_response()
         self.http_status = 200  # the http status code
         self.status = ResponseCode.SUCCESS  # the internal service status code
         self.message = 'success'
+        self.method = method
         self.uri = uri
         self.elapsed = 0
         self.time = int(time.time())
@@ -45,18 +50,35 @@ class HTTPResponse:
         elif self.status == ResponseCode.InternalUnknownError:
             self.http_status = 500
 
+    def set_cookie(self, *args, **kwargs):
+        self.cookie_response.set_cookie(*args, **kwargs)
+
+    def set_jwt_auth_cookie(self, auth_token):
+        self.set_cookie(
+            RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME,
+            auth_token,
+            httponly=True,
+            secure=False,
+            samesite='Lax'
+        )
+
     def return_with_log(self):
         if self.http_status == 200:
-            logger.info('%s %d, elapsed: %dms', self.uri, self.http_status, self.elapsed)
+            logger.info('%s %s %d, elapsed: %dms', self.method, self.uri, self.http_status, self.elapsed)
         elif self.http_status in [400, 401]:
-            logger.info('%s %d, elapsed: %dms, err=%s', self.uri, self.http_status, self.elapsed, self.message)
+            logger.info('%s %s %d, elapsed: %dms, err=%s', self.method, self.uri, self.http_status, self.elapsed,
+                        self.message)
         else:
-            logger.error('%s %d, elapsed: %dms, err=%s', self.uri, self.http_status, self.elapsed, self.message)
+            logger.error('%s %s %d, elapsed: %dms, err=%s', self.method, self.uri, self.http_status, self.elapsed,
+                         self.message)
 
-        return jsonify({
+        response = jsonify({
             'status': self.status,
             'message': self.message,
             'uri': self.uri,
             'elapsed': int(time.time() - self.time),
             'data': self.data,
-        }), self.http_status
+        })
+        for cookie in self.cookie_response.headers.getlist("Set-Cookie"):
+            response.headers.add("Set-Cookie", cookie)
+        return response, self.http_status
