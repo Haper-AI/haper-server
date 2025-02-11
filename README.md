@@ -26,6 +26,7 @@ To get started, ensure you have the following installed:
    JWT_AUTH_COOKIE_NAME=<the cookie name for the jwt token>
    LOG_LEVEL=<log level, DEBUG for test, INFO for production>
    POSTGRES_DSN=<your postgresql db dsn>
+   ALLOW_ORIGINS=<list of allow origins for CORS, separate by comma>
    ```
 
 2. Run the application:
