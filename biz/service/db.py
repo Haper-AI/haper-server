@@ -10,7 +10,9 @@ _session_factory: sessionmaker
 
 def init_db():
     global _engine, _session_factory
-    _engine = create_engine(RuntimeEnv.Instance().POSTGRES_DSN)
+    # use pool_pre_ping right now to prevent TCP EOF as the server and db cluster may distribute in different data center
+    # learn more in this post: https://blog.stigok.com/2021/02/28/sqlalchemy-postgres-ssl-eof-detected.html
+    _engine = create_engine(RuntimeEnv.Instance().POSTGRES_DSN, pool_pre_ping=True)
     _session_factory = sessionmaker(bind=_engine)
 
 
