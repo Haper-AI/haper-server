@@ -1,5 +1,12 @@
 from flask import request
-from pydantic import BaseModel, EmailStr, PositiveInt, Field, AfterValidator, model_validator
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    PositiveInt,
+    Field,
+    AfterValidator,
+    model_validator
+)
 from typing import Optional
 from typing_extensions import Annotated
 from biz.handler.middleware import catch_error, gen_jwt_auth

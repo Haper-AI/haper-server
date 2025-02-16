@@ -159,8 +159,12 @@ class Account(Base):
         return session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).first()
 
     @classmethod
+    def get_by_gmail(cls, session: Session, email: str):
+        return session.query(cls).filter_by(email=email, provider="google").first()
+
+    @classmethod
     def update_tokens(cls, session: Session, provider: str, provider_account_id: str,
-                      access_token: str, refresh_token: Optional[str], expires_at: Optional[str]):
+                      access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None):
         updates = {
             'access_token': access_token,
         }
