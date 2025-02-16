@@ -168,3 +168,7 @@ cython_debug/
 # Custom
 tests
 .github
+.git
+README.md
+Dockerfile
+.dockerignore
