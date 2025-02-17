@@ -11,7 +11,7 @@ from biz.utils.logger import logger
 from biz.controller.message_sync import sync_user_gmail_message
 
 
-webhook_routes = Blueprint("message_delegation_api", __name__, url_prefix="/webhook")
+webhook_routes = Blueprint("webhooks", __name__, url_prefix="/webhook")
 
 class GmailPubsubMessage(BaseModel):
     class MessageData(BaseModel):
