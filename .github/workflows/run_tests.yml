@@ -45,8 +45,6 @@ jobs:
       POSTGRES_DSN: "" # doesn't have to set up this env as it will be replaced during pytest fixture code
       SQS_REGION: us-east-1
       SQS_ENDPOINT: "http://localhost:4566"
-      SQS_QUEUE_NAME: "report-update"
-      SQS_REPORT_UPDATE_QUEUE_URL: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/$SQS_QUEUE_NAME"
       AWS_ACCESS_KEY_ID: dummy
       AWS_SECRET_ACCESS_KEY: dummy
 
@@ -64,10 +62,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create sqs queue
-        run: |
-          docker exec $(docker ps --filter "ancestor=localstack/localstack" -q) \
-          awslocal sqs create-queue --queue-name $SQS_QUEUE_NAME
+      # now the queue is created during tests setup code
+#      - name: Create sqs queue
+#        run: |
+#          docker exec $(docker ps --filter "ancestor=localstack/localstack" -q) \
+#          awslocal sqs create-queue --queue-name $SQS_QUEUE_NAME
 
       - name: Run Pytest with Coverage
         timeout-minutes: 5 # Timeout in 5 minutes for tests

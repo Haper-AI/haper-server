@@ -1,0 +1,178 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$ref": "#/definitions/Report",
+    "definitions": {
+        "Report": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "summary": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Summary"
+                    }
+                },
+                "content": {
+                    "$ref": "#/definitions/Content"
+                }
+            },
+            "required": [
+                "content",
+                "summary"
+            ],
+            "title": "Report"
+        },
+        "Content": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "content_sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "gmail": {
+                    "$ref": "#/definitions/Gmail"
+                }
+            },
+            "required": [
+                "content_sources",
+                "gmail"
+            ],
+            "title": "Content"
+        },
+        "Gmail": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "essential": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/MailReportItem"
+                    }
+                },
+                "non_essential": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/MailReportItem"
+                    }
+                }
+            },
+            "required": [
+                "essential",
+                "non_essential"
+            ],
+            "title": "Gmail"
+        },
+        "MailReportItem": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "message_id": {
+                    "type": "integer"
+                },
+                "thread_id": {
+                    "type": "integer"
+                },
+                "receive_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "sender": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "summary": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "action": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "action",
+                "message_id",
+                "receive_at",
+                "sender",
+                "subject",
+                "summary",
+                "tags",
+                "thread_id"
+            ],
+            "title": "MailReportItem"
+        },
+        "Summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "type": "string"
+                },
+                "text": {
+                    "$ref": "#/definitions/Text"
+                },
+                "annotations": {
+                    "$ref": "#/definitions/Annotations"
+                },
+                "email": {
+                    "$ref": "#/definitions/Email"
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "title": "Summary"
+        },
+        "Annotations": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "bold": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+            ],
+            "title": "Annotations"
+        },
+        "Email": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "email",
+                "name"
+            ],
+            "title": "Email"
+        },
+        "Text": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "content": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "content"
+            ],
+            "title": "Text"
+        }
+    }
+}

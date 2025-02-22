@@ -39,7 +39,7 @@ def sync_user_gmail_message(email: str, history_id: int):
             if "messagesAdded" in history:
                 for message in history['messagesAdded']:
                     new_gmail_message.append({
-                        "id": message["message"]["id"],
+                        "message_id": message["message"]["id"],
                         "thread_id": message["message"]["threadId"],
                     })
         page_token = response.get("nextPageToken")
@@ -47,10 +47,20 @@ def sync_user_gmail_message(email: str, history_id: int):
             has_next_page = False
 
     # send the new messages to sqs that connected to haper-agent
-    # TODO: update message format
     send_report_update_message(json.dumps({
+        "user_info": {
+            "user_id": str(account_info.user_id),
+        },
+        # TODO: get report id
+        # "report_info": {
+        #     "report_id": str(account_info.report_id),
+        # },
         "messages": {
             "gmail": {
+                "account_info": {
+                    "provider": "google",
+                    "provider_account_id": account_info.provider_account_id,
+                },
                 "new_messages": new_gmail_message,
             }
         }

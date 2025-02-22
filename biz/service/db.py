@@ -32,11 +32,10 @@ def get_session(write: bool = False):
     session = _session_factory()  # Create a session
     try:
         yield session  # Yield the session for use
+        if write:
+            session.commit()
+        session.close()  # Close the session after use
     except Exception as e:
         if write:
             session.rollback()
         raise e
-    finally:
-        if write:
-            session.commit()
-        session.close()  # Close the session after use

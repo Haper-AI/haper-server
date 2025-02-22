@@ -1,5 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
+
+from biz.service.sqs import init_sqs
 from biz.utils.env import RuntimeEnv
 from biz.handler import api_v1
 from biz.service.db import init_db
@@ -10,6 +12,7 @@ def create_app():
     app = Flask(RuntimeEnv.Instance().APP_NAME)
     app.register_blueprint(api_v1)
     init_db()
+    init_sqs()
     CORS(app, resources={
         r"/*": {
             "origins": RuntimeEnv.Instance().ALLOW_ORIGINS,

@@ -1,15 +1,18 @@
 import pytest
 from pytest_postgresql.janitor import DatabaseJanitor
 from flask import Flask
+
+from biz.service.sqs import init_sqs, get_sqs_client
 from biz.utils.env import RuntimeEnv
 from biz.handler import api_v1
 from biz.service.db import init_db, get_engine
 from biz.dal.base import Base
 
 
-def new_handler_test_conf(scope, db_name: str):
+def new_handler_test_conf(scope, db_name: str, sqs_queue_name: str):
     @pytest.fixture(scope=scope)
     def app():
+        # set up db
         user = "root"
         password = "123456"
         host = "localhost"
@@ -32,15 +35,21 @@ def new_handler_test_conf(scope, db_name: str):
             "TESTING": True,
         })
 
-        # other setup can go here
-
         # create db tables
         Base.metadata.create_all(bind=get_engine())
+
+        # set up sqs
+        init_sqs()
+        RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL = get_sqs_client(). \
+            create_queue(QueueName=sqs_queue_name)["QueueUrl"]
+
+        # other setup can go here
 
         yield app
 
         # clean up / reset resources here
         janitor.drop()
+        get_sqs_client().delete_queue(QueueUrl=RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL)
 
     @pytest.fixture(scope=scope)
     def client(app):

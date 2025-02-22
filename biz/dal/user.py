@@ -132,7 +132,7 @@ class Account(Base):
         comment='The unix time of when the access token will expire'
     )
     created_at = Column(
-        TIMESTAMP,
+        TIMESTAMP(timezone=True),
         nullable=False,
         default=datetime.datetime.now(datetime.timezone.utc),
         comment='UTC timestamp when the account was created'
