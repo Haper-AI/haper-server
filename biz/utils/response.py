@@ -34,7 +34,7 @@ class HTTPResponse:
         self.method = method
         self.uri = uri
         self.elapsed = 0
-        self.time = int(time.time())
+        self.time = int(time.time() * 1000)
         self.data = None
 
     def set_data(self, data):
@@ -76,7 +76,7 @@ class HTTPResponse:
             'status': self.status,
             'message': self.message,
             'uri': self.uri,
-            'elapsed': int(time.time() - self.time),
+            'elapsed': int(time.time() * 1000 - self.time),
             'data': self.data,
         })
         for cookie in self.cookie_response.headers.getlist("Set-Cookie"):

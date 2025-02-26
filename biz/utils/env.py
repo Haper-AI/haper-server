@@ -44,3 +44,7 @@ class RuntimeEnv:
         self.SQS_REPORT_UPDATE_QUEUE_URL = os.getenv("SQS_REPORT_UPDATE_QUEUE_URL")
         self.AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
         self.AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+        # google cloud
+        self.GMAIL_WATCH_PUB_SUB_TOPIC = os.getenv("GMAIL_WATCH_PUB_SUB_TOPIC")
+

@@ -9,12 +9,12 @@ from sqlalchemy import (
     BigInteger,
     TIMESTAMP,
     ForeignKey,
-    UniqueConstraint
+    UniqueConstraint,
+    func
 )
 
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session
-import datetime
 from .base import Base
 
 
@@ -53,9 +53,9 @@ class User(Base):
         comment='Hashed password of user'
     )
     created_at = Column(
-        TIMESTAMP,
+        TIMESTAMP(timezone=True),
         nullable=False,
-        default=datetime.datetime.now(datetime.timezone.utc),
+        default=func.now(),
         comment='UTC timestamp when the user was created'
     )
 
@@ -93,9 +93,17 @@ class User(Base):
 class Account(Base):
     __tablename__ = 'accounts'
     __table_args__ = (
-        {'comment': 'User OAuth accounts, one user can have multiple accounts'}
+        UniqueConstraint('provider', 'provider_account_id', name='unique_provider_account'),
+        {'comment': 'User OAuth accounts, one user can have multiple accounts'},
     )
 
+    id = Column(
+        UUID,
+        primary_key=True,
+        nullable=False,
+        default=lambda: str(uuid.uuid4()),
+        comment='Primary record key id of the account'
+    )
     user_id = Column(
         UUID,
         ForeignKey('users.id', ondelete="CASCADE"),
@@ -104,18 +112,18 @@ class Account(Base):
     )
     provider = Column(
         String(16),
-        primary_key=True,
+        primary_key=False,
         nullable=False,
         comment='The OAuth provider, like google, discord, etc.'
     )
     provider_account_id = Column(
         Text,
-        primary_key=True,
+        primary_key=False,
         nullable=False,
         comment='The unique account ID of the user for the provider'
     )
     email = Column(
-        String(32),
+        String(128),
         comment='The email info returned by the provider, may vary for different providers'
     )
     access_token = Column(
@@ -134,13 +142,14 @@ class Account(Base):
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        default=datetime.datetime.now(datetime.timezone.utc),
+        default=func.now(),
         comment='UTC timestamp when the account was created'
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: str, provider: str, provider_account_id: str, email: str,
-            access_token: str, refresh_token: str, expires_at: int):
+    def add(cls, session: Session, user_id: str, provider: str, provider_account_id: str,
+            access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None,
+            email: Optional[str]=None):
         account = cls(
             user_id=user_id,
             provider=provider,
@@ -155,6 +164,14 @@ class Account(Base):
         return account
 
     @classmethod
+    def list_by_user_id(cls, session: Session, user_id: str):
+        return session.query(cls).filter_by(user_id=user_id).all()
+
+    @classmethod
+    def get_by_id(cls, session: Session, account_id: str):
+        return session.query(cls).filter_by(id=account_id).first()
+
+    @classmethod
     def get_by_provider_and_provider_id(cls, session: Session, provider: str, provider_account_id: str):
         return session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).first()
 
@@ -163,7 +180,7 @@ class Account(Base):
         return session.query(cls).filter_by(email=email, provider="google").first()
 
     @classmethod
-    def update_tokens(cls, session: Session, provider: str, provider_account_id: str,
+    def update_tokens(cls, session: Session, account_id: str,
                       access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None):
         updates = {
             'access_token': access_token,
@@ -174,4 +191,4 @@ class Account(Base):
         if expires_at:
             updates['expires_at'] = expires_at
 
-        session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).update(updates)
+        session.query(cls).filter_by(id=account_id).update(updates)

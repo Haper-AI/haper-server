@@ -14,11 +14,11 @@ from biz.controller.message_sync import sync_user_gmail_message
 webhook_routes = Blueprint("webhooks", __name__, url_prefix="/webhook")
 
 class GmailPubsubMessage(BaseModel):
-    class MessageData(BaseModel):
+    class _MessageData(BaseModel):
         emailAddress: EmailStr
         historyId: int
 
-    data: MessageData
+    data: _MessageData
     message_id: str
     publish_time: str
 

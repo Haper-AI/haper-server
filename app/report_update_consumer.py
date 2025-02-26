@@ -79,7 +79,7 @@ def handle_message(message_body):
 
         # get user account info from db
         with get_session(False) as session:
-            account_info = Account.get_by_provider_and_provider_id(
+            account = Account.get_by_provider_and_provider_id(
                 session,
                 gmail_account_info.provider,
                 gmail_account_info.provider_account_id
@@ -87,9 +87,9 @@ def handle_message(message_body):
 
         # use user account info to call gmail api
         gmail_api_client, _ = build_gmail_client(
-            account_info.access_token,
-            account_info.refresh_token,
-            datetime.fromtimestamp(account_info.expires_at)
+            account.access_token,
+            account.refresh_token,
+            datetime.fromtimestamp(account.expires_at)
         )
 
         for new_gmail_msg in new_gmail_messages:
@@ -114,8 +114,9 @@ def init():
 
 
 if __name__ == '__main__':
-    init()
     logger.info('Agent service starting up...')
+    init()
+    logger.info('Agent service start consuming')
     try:
         while True:
             response = get_sqs_client().receive_message(

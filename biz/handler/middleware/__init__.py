@@ -19,7 +19,7 @@ class RequestContext:
 
 USER_JWT_AUTH_VALID_PERIOD = datetime.timedelta(days=30)
 
-def gen_jwt_auth(user_id: str, ) -> str:
+def gen_jwt_auth(user_id: str) -> str:
     payload = {
         'id': user_id,
         'exp': datetime.datetime.now(datetime.timezone.utc) + USER_JWT_AUTH_VALID_PERIOD,
@@ -60,8 +60,8 @@ def jwt_auth(f):
                 return resp.return_with_log()
 
             # store user_id in request context
-            if not request.ctx:
-                request.ctx = RequestContext()
+            if not hasattr(request, 'ctx'):
+                setattr(request, 'ctx', RequestContext())
             request.ctx.user_id = user_id
 
             # execute next handler

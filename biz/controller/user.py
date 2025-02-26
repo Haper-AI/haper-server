@@ -15,6 +15,7 @@ email_to_name = lambda email: email.split('@')[0]
 
 GOOGLE_TOKEN_VALIDATION_URL = 'https://www.googleapis.com/oauth2/v1/tokeninfo'
 
+
 def hash_password(password: str, salt: bytes = None) -> str:
     if not salt:
         salt = os.urandom(16)
@@ -31,6 +32,7 @@ def compare_password(hashed_password: str, password: str) -> bool:
     except InvalidKey:
         return False
 
+
 def validate_oauth_token(provider: str, access_token: str) -> bool:
     if provider == 'google':
         url = f'{GOOGLE_TOKEN_VALIDATION_URL}?access_token={access_token}'
@@ -40,6 +42,7 @@ def validate_oauth_token(provider: str, access_token: str) -> bool:
         data = response.json()
         return data.get('email') is not None
     return False
+
 
 def signup_user_by_credential(email: str, password: str):
     # check user registered or not
@@ -62,7 +65,6 @@ def signup_user_by_credential(email: str, password: str):
 def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
                          access_token: str, refresh_token: Optional[str], expires_at: Optional[int],
                          name: Optional[str], image: Optional[str]):
-
     if not validate_oauth_token(provider, access_token):
         raise ResponseCode.InvalidAuth.create_error("Invalid or expired OAuth token.")
 
@@ -75,7 +77,7 @@ def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
             name = email_to_name(email)
         user = User.add(session, name, email, email_verified=True, image=image)
         account = Account.add(session, user.id, provider, provider_account_id,
-                              email, access_token, refresh_token, expires_at)
+                              access_token, refresh_token, expires_at, email)
         make_transient(user), make_transient(account)
     return user, account
 
@@ -113,7 +115,17 @@ def login_user_by_oauth(provider: str, provider_account_id: str,
             raise ResponseCode.InternalUnknownError.create_error(f"user not found for account {provider_account_id}")
 
         # update account
-        Account.update_tokens(session, provider, provider_account_id, access_token, refresh_token, expires_at)
+        Account.update_tokens(session, account.id, access_token, refresh_token, expires_at)
 
         make_transient(user)
+    return user
+
+
+def get_user_info(user_id: str):
+    with get_session(write=False) as session:
+        user = User.get_by_id(session, user_id)
+
+    if not user:
+        return ResponseCode.InvalidParam.create_error(f"user not found for user {user_id}")
+
     return user

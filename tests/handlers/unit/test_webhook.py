@@ -1,5 +1,6 @@
 import base64
 import json
+import uuid
 from datetime import timedelta, datetime
 
 from .conftest import *
@@ -13,6 +14,7 @@ class TestGmailSyncWebhook:
     def test_success(self, mock_account_get_by_gmail, mock_build_gmail_client, client):
         # configure account table
         mock_account = MagicMock()
+        mock_account.id = uuid.uuid4()
         mock_account.access_token = generate_random_string(10)
         mock_account.refresh_token = generate_random_string(10)
         mock_account.expires_at = (datetime.now() + timedelta(hours=1)).timestamp()
