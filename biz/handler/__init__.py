@@ -1,4 +1,6 @@
 from flask import Blueprint
+
+from .system import system_routes
 from .user import user_routes
 from .webhook import webhook_routes
 from .messages import message_routes
@@ -9,5 +11,7 @@ api_v1.register_blueprint(user_routes)
 api_v1.register_blueprint(webhook_routes)
 
 api_v1.register_blueprint(message_routes)
+
+api_v1.register_blueprint(system_routes)
 
 __all__ = ["api_v1"]
