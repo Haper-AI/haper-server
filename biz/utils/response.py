@@ -9,8 +9,10 @@ from .logger import logger
 class ResponseCode(IntEnum):
     SUCCESS = 0
     InvalidParam = 1001
+    UnsupportedAction = 1002
     InvalidAuth = 1101
     UserNoPermission = 1102
+    ResourceNotFound = 1201
     InternalUnknownError = 9999
 
     def create_error(self, message: str = '') -> 'SError':
@@ -43,10 +45,12 @@ class HTTPResponse:
     def set_error(self, err: SError):
         self.status = err.code
         self.message = err.message
-        if self.status == ResponseCode.InvalidParam:
+        if self.status in [ResponseCode.InvalidParam, ResponseCode.UnsupportedAction]:
             self.http_status = 400
         elif self.status in [ResponseCode.InvalidAuth, ResponseCode.UserNoPermission]:
             self.http_status = 401
+        elif self.status == ResponseCode.ResourceNotFound:
+            self.http_status = 404
         elif self.status == ResponseCode.InternalUnknownError:
             self.http_status = 500
 

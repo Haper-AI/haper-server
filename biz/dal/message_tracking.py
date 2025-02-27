@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey, Enum, func
+from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from enum import Enum as PyEnum

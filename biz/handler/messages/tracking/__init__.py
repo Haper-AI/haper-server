@@ -3,19 +3,19 @@ from typing import Optional
 from flask import Blueprint, request
 from pydantic import BaseModel, PositiveInt, model_validator
 
-from biz.controller.messag_tracking import get_user_all_message_tracking_status, \
-    start_message_tracking_with_existing_account, start_message_tracking_with_new_account, end_message_tracking
+from biz.controller import message_tracking as message_tracking_ctrl
 from biz.handler.middleware import catch_error, jwt_auth
 from biz.utils.response import HTTPResponse
 
 tracking_routes = Blueprint("message_tracking_api", __name__, url_prefix="/tracking")
+
 
 @tracking_routes.route("/status")
 @catch_error
 @jwt_auth
 def list_message_tracking_status():
     resp = HTTPResponse(request.method, request.path)
-    status = get_user_all_message_tracking_status(request.ctx.user_id)
+    status = message_tracking_ctrl.list_user_message_tracking_status(request.ctx.user_id)
     resp.set_data({
         "tracking_status": status
     })
@@ -49,9 +49,9 @@ def start_message_tracking():
     resp = HTTPResponse(request.method, request.path)
     req = StartMessageTrackingReq(**request.get_json())
     if req.account_id:
-        record = start_message_tracking_with_existing_account(request.ctx.user_id, req.account_id)
+        record = message_tracking_ctrl.start_message_tracking_with_existing_account(request.ctx.user_id, req.account_id)
     else:
-        record = start_message_tracking_with_new_account(
+        record = message_tracking_ctrl.start_message_tracking_with_new_account(
             request.ctx.user_id,
             req.account.provider,
             req.account.provider_account_id,
@@ -76,7 +76,7 @@ class EndMessageTrackingReq(BaseModel):
 def stop_message_tracking():
     resp = HTTPResponse(request.method, request.path)
     req = EndMessageTrackingReq(**request.get_json())
-    record = end_message_tracking(request.ctx.user_id, req.account_id)
+    record = message_tracking_ctrl.end_message_tracking(request.ctx.user_id, req.account_id)
     resp.set_data({
         "new_tracking_status": record
     })

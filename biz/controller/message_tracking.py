@@ -11,7 +11,7 @@ from biz.utils.gmail import build_gmail_client
 from biz.utils.response import ResponseCode
 
 
-def get_user_all_message_tracking_status(user_id: str):
+def list_user_message_tracking_status(user_id: str):
     result = []
     with get_session(write=False) as session:
         user_accounts = Account.list_by_user_id(session, user_id)
