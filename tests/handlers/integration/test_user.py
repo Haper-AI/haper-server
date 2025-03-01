@@ -1,4 +1,4 @@
-from .conftest import *
+from .conftest import client
 from tests import generate_random_string, generate_random_gmail
 from biz.controller.user import GOOGLE_TOKEN_VALIDATION_URL
 

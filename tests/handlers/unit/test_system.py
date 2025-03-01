@@ -1,6 +1,6 @@
 from biz.dal.system_preset import PresetMessageTag
 from biz.service.db import get_session
-from .conftest import *
+from .conftest import client
 
 class TestSystem:
     def test_success(self, client):

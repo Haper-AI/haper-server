@@ -34,11 +34,16 @@ def get_user_info():
 def get_user_setting():
     resp = HTTPResponse(request.method, request.path)
     user_setting = user_setting_ctrl.get_user_setting(request.ctx.user_id)
-    resp.set_data({
-        "setting": {
-            "key_message_tags": user_setting.key_message_tags,
-        },
-    })
+    if not user_setting:
+        resp.set_data({
+            "setting": None
+        })
+    else:
+        resp.set_data({
+            "setting": {
+                "key_message_tags": user_setting.key_message_tags,
+            },
+        })
     return resp.return_with_log()
 
 class CreateUpdateUserSettingReq(BaseModel):

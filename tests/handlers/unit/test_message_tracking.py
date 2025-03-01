@@ -12,31 +12,7 @@ from biz.service.db import get_session
 from biz.utils.env import RuntimeEnv
 
 from tests import generate_random_string, generate_random_gmail
-from .conftest import *
-
-
-@pytest.fixture
-def new_user():
-    email = generate_random_gmail(8)
-    with get_session(write=True) as session:
-        user = User.add(session, "user name", email, email_verified=True)
-        make_transient(user)
-
-    return user
-
-
-@pytest.fixture
-def new_user_account():
-    email = generate_random_gmail(8)
-    with get_session(write=True) as session:
-        user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(session, user.id, "google", generate_random_string(16),
-                              "access_token", "refresh_token",
-                              expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()))
-
-        make_transient(user), make_transient(account)
-
-    return user, account
+from .conftest import client, new_user, new_user_account
 
 
 @pytest.fixture
@@ -56,15 +32,6 @@ def new_user_account_tracking_record():
     return user, account, record
 
 
-class TestMessageTrackingGetStatus:
-    def test_success(self, client, new_user_account_tracking_record):
-        user, _, _ = new_user_account_tracking_record
-        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-        response = client.get("/api/v1/message/tracking/status")
-        assert response.status_code == 200
-        assert len(response.get_json()['data']['tracking_status']) != 0
-
-
 @pytest.fixture(scope="module")
 def patch_build_gmail_client():
     # config gmail client api mock
@@ -81,6 +48,15 @@ def patch_build_gmail_client():
     with patch('biz.controller.message_tracking.build_gmail_client',
                return_value=(mock_gmail_client, mock_credential)) as mock_build_gmail_account:
         yield mock_build_gmail_account
+
+
+class TestMessageTrackingGetStatus:
+    def test_success(self, client, new_user_account_tracking_record):
+        user, _, _ = new_user_account_tracking_record
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        response = client.get("/api/v1/message/tracking/status")
+        assert response.status_code == 200
+        assert len(response.get_json()['data']['tracking_status']) != 0
 
 
 class TestMessageTrackingStart:
@@ -129,6 +105,7 @@ class TestMessageTrackingStart:
             })
 
             assert response.status_code == 400
+
 
 class TestMessageTrackingStop:
 

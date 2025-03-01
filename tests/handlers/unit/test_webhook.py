@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import timedelta, datetime
 
-from .conftest import *
+from .conftest import client
 from tests import generate_random_string, generate_random_gmail
 from unittest.mock import patch, MagicMock
 

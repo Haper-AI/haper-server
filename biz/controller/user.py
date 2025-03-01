@@ -126,6 +126,6 @@ def get_user_info(user_id: str):
         user = User.get_by_id(session, user_id)
 
     if not user:
-        return ResponseCode.InvalidParam.create_error(f"user not found for user {user_id}")
+        raise ResponseCode.InvalidParam.create_error(f"user not found for user {user_id}")
 
     return user
