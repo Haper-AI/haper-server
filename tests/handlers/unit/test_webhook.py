@@ -4,7 +4,7 @@ import uuid
 from datetime import timedelta, datetime
 
 from .conftest import *
-from tests import generate_random_string
+from tests import generate_random_string, generate_random_gmail
 from unittest.mock import patch, MagicMock
 
 
@@ -46,7 +46,7 @@ class TestGmailSyncWebhook:
 
         mock_build_gmail_client.return_value = (mock_gmail_client, mock_credential)
 
-        email = f'{generate_random_string(8)}@gmail.com'
+        email = generate_random_gmail(8)
 
         response = client.post('/api/v1/webhook/gmail-sync', json={
             'message': {
@@ -63,7 +63,7 @@ class TestGmailSyncWebhook:
 
     class TestFail:
         def test_fail_by_no_registered_email(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             response = client.post('/api/v1/webhook/gmail-sync', json={
                 'message': {
                     'data': base64.b64encode(json.dumps({
