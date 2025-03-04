@@ -32,12 +32,12 @@ def end_reporting_sequence(session: Session, user_id: str):
 def generate_report(user_id: str):
     with get_session(write=True) as session:
         latest_report = Report.get_latest_by_user_id(session, user_id)
-        if latest_report and latest_report.content:
+        if latest_report and not latest_report.content:
             raise ResponseCode.UnsupportedAction.create_error(
                 "latest report has no content, please wait for new messages")
         # finalize the report and create a new one
         Report.update(session, latest_report.id, status=ReportStatus.Finalized)
-        blank_report = Report.add(session, user_id)
+        blank_report = Report.add(session, user_id, {})
         make_transient(latest_report), make_transient(blank_report)
 
     return latest_report, blank_report
@@ -49,7 +49,8 @@ def get_newest_report_summary(user_id: str):
 
     if latest_report and latest_report.content:
         report_content = report_from_dict(latest_report.content)
-        return report_content.summary
+        if report_content.summary:
+            return [r.to_dict() for r in report_content.summary]
     return []
 
 

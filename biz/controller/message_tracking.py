@@ -55,6 +55,10 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
             # insert tracking record to db if not exist
             tracking_record = MessageTrackingRecord.add(session, user_id, account_id)
 
+        # if the ongoing message tracking count goes from 0 to 1, start report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
+            start_new_reporting_sequence(session, user_id)
+
         # start sync message with provider
         if account.provider == 'google':
             gmail_api_client, credential = build_gmail_client(
@@ -90,10 +94,6 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
                     expires_at=int(credential.expiry.timestamp()),
                 )
 
-        # if the ongoing message tracking count goes from 0 to 1, start report sequence
-        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
-            start_new_reporting_sequence(session, user_id)
-
         make_transient(tracking_record), make_transient(account)
 
     return {
@@ -118,6 +118,10 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
         account = Account.add(session, user_id, provider, provider_account_id,
                               access_token, refresh_token, expires_at, email)
 
+        # if the ongoing message tracking count goes from 0 to 1, start report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
+            start_new_reporting_sequence(session, user_id)
+
         extra_info = {}
         # start sync message with provider
         if provider == 'google':
@@ -139,10 +143,6 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
 
         # create tracking record
         tracking_record = MessageTrackingRecord.add(session, user_id, account.id, extra_info=extra_info)
-
-        # if the ongoing message tracking count goes from 0 to 1, start report sequence
-        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
-            start_new_reporting_sequence(session, user_id)
 
         make_transient(tracking_record), make_transient(account)
 
@@ -172,6 +172,10 @@ def end_message_tracking(user_id: str, account_id: str):
         tracking_record.status = MessageTrackingStatus.STOPPED
         tracking_record.updated_at = datetime.now(timezone.utc)
 
+        # if the ongoing message tracking count goes from 1 to 0, end report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 0:
+            end_reporting_sequence(session, user_id)
+
         # stop message sync with provider
         if account.provider == 'google':
             gmail_api_client, credential = build_gmail_client(
@@ -189,10 +193,6 @@ def end_message_tracking(user_id: str, account_id: str):
                     credential.token,
                     expires_at=int(credential.expiry.timestamp())
                 )
-
-        # if the ongoing message tracking count goes from 1 to 0, end report sequence
-        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 0:
-            end_reporting_sequence(session, user_id)
 
         make_transient(tracking_record), make_transient(account)
 

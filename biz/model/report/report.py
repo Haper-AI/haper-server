@@ -11,11 +11,6 @@ def from_str(x: Any) -> str:
     return x
 
 
-def from_int(x: Any) -> int:
-    assert isinstance(x, int) and not isinstance(x, bool)
-    return x
-
-
 def from_datetime(x: Any) -> datetime:
     return dateutil.parser.parse(x)
 
@@ -51,15 +46,15 @@ def from_bool(x: Any) -> bool:
 
 class MailReportItem:
     action: str
-    message_id: int
+    message_id: str
     receive_at: datetime
     sender: str
     subject: str
     summary: str
     tags: List[str]
-    thread_id: int
+    thread_id: str
 
-    def __init__(self, action: str, message_id: int, receive_at: datetime, sender: str, subject: str, summary: str, tags: List[str], thread_id: int) -> None:
+    def __init__(self, action: str, message_id: str, receive_at: datetime, sender: str, subject: str, summary: str, tags: List[str], thread_id: str) -> None:
         self.action = action
         self.message_id = message_id
         self.receive_at = receive_at
@@ -73,25 +68,25 @@ class MailReportItem:
     def from_dict(obj: Any) -> 'MailReportItem':
         assert isinstance(obj, dict)
         action = from_str(obj.get("action"))
-        message_id = from_int(obj.get("message_id"))
+        message_id = from_str(obj.get("message_id"))
         receive_at = from_datetime(obj.get("receive_at"))
         sender = from_str(obj.get("sender"))
         subject = from_str(obj.get("subject"))
         summary = from_str(obj.get("summary"))
         tags = from_list(from_str, obj.get("tags"))
-        thread_id = from_int(obj.get("thread_id"))
+        thread_id = from_str(obj.get("thread_id"))
         return MailReportItem(action, message_id, receive_at, sender, subject, summary, tags, thread_id)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["action"] = from_str(self.action)
-        result["message_id"] = from_int(self.message_id)
+        result["message_id"] = from_str(self.message_id)
         result["receive_at"] = self.receive_at.isoformat()
         result["sender"] = from_str(self.sender)
         result["subject"] = from_str(self.subject)
         result["summary"] = from_str(self.summary)
         result["tags"] = from_list(from_str, self.tags)
-        result["thread_id"] = from_int(self.thread_id)
+        result["thread_id"] = from_str(self.thread_id)
         return result
 
 

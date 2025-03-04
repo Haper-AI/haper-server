@@ -28,7 +28,7 @@ def new_user_account_tracking_record():
         record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
             "some_info_key": "some_info_value"
         })
-        Report.add(session, user.id)
+        Report.add(session, user.id, {})
 
         make_transient(user), make_transient(account), make_transient(record)
     return user, account, record

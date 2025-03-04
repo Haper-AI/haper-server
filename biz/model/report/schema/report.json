@@ -69,10 +69,10 @@
             "additionalProperties": false,
             "properties": {
                 "message_id": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "thread_id": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "receive_at": {
                     "type": "string",
