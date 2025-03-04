@@ -3,7 +3,9 @@ from typing import Optional
 
 from sqlalchemy.orm import make_transient
 
+from biz.controller.report import start_new_reporting_sequence, end_reporting_sequence
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
+from biz.dal.report import Report
 from biz.dal.user import Account
 from biz.service.db import get_session
 from biz.utils.env import RuntimeEnv
@@ -88,6 +90,10 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
                     expires_at=int(credential.expiry.timestamp()),
                 )
 
+        # if the ongoing message tracking count goes from 0 to 1, start report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
+            start_new_reporting_sequence(session, user_id)
+
         make_transient(tracking_record), make_transient(account)
 
     return {
@@ -134,6 +140,10 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
         # create tracking record
         tracking_record = MessageTrackingRecord.add(session, user_id, account.id, extra_info=extra_info)
 
+        # if the ongoing message tracking count goes from 0 to 1, start report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
+            start_new_reporting_sequence(session, user_id)
+
         make_transient(tracking_record), make_transient(account)
 
     return {
@@ -179,6 +189,10 @@ def end_message_tracking(user_id: str, account_id: str):
                     credential.token,
                     expires_at=int(credential.expiry.timestamp())
                 )
+
+        # if the ongoing message tracking count goes from 1 to 0, end report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 0:
+            end_reporting_sequence(session, user_id)
 
         make_transient(tracking_record), make_transient(account)
 

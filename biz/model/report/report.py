@@ -30,11 +30,6 @@ def to_class(c: Type[T], x: Any) -> dict:
     return cast(Any, x).to_dict()
 
 
-def from_bool(x: Any) -> bool:
-    assert isinstance(x, bool)
-    return x
-
-
 def from_none(x: Any) -> Any:
     assert x is None
     return x
@@ -47,6 +42,11 @@ def from_union(fs, x):
         except:
             pass
     assert False
+
+
+def from_bool(x: Any) -> bool:
+    assert isinstance(x, bool)
+    return x
 
 
 class MailReportItem:
@@ -117,25 +117,26 @@ class Gmail:
         return result
 
 
-class Content:
+class ReportContent:
     content_sources: List[str]
-    gmail: Gmail
+    gmail: Optional[Gmail]
 
-    def __init__(self, content_sources: List[str], gmail: Gmail) -> None:
+    def __init__(self, content_sources: List[str], gmail: Optional[Gmail]) -> None:
         self.content_sources = content_sources
         self.gmail = gmail
 
     @staticmethod
-    def from_dict(obj: Any) -> 'Content':
+    def from_dict(obj: Any) -> 'ReportContent':
         assert isinstance(obj, dict)
         content_sources = from_list(from_str, obj.get("content_sources"))
-        gmail = Gmail.from_dict(obj.get("gmail"))
-        return Content(content_sources, gmail)
+        gmail = from_union([Gmail.from_dict, from_none], obj.get("gmail"))
+        return ReportContent(content_sources, gmail)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["content_sources"] = from_list(from_str, self.content_sources)
-        result["gmail"] = to_class(Gmail, self.gmail)
+        if self.gmail is not None:
+            result["gmail"] = from_union([lambda x: to_class(Gmail, x), from_none], self.gmail)
         return result
 
 
@@ -198,7 +199,7 @@ class Text:
         return result
 
 
-class Summary:
+class RichText:
     annotations: Optional[Annotations]
     email: Optional[Email]
     text: Optional[Text]
@@ -211,13 +212,13 @@ class Summary:
         self.type = type
 
     @staticmethod
-    def from_dict(obj: Any) -> 'Summary':
+    def from_dict(obj: Any) -> 'RichText':
         assert isinstance(obj, dict)
         annotations = from_union([Annotations.from_dict, from_none], obj.get("annotations"))
         email = from_union([Email.from_dict, from_none], obj.get("email"))
         text = from_union([Text.from_dict, from_none], obj.get("text"))
         type = from_str(obj.get("type"))
-        return Summary(annotations, email, text, type)
+        return RichText(annotations, email, text, type)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -232,24 +233,24 @@ class Summary:
 
 
 class Report:
-    content: Content
-    summary: List[Summary]
+    content: ReportContent
+    summary: List[RichText]
 
-    def __init__(self, content: Content, summary: List[Summary]) -> None:
+    def __init__(self, content: ReportContent, summary: List[RichText]) -> None:
         self.content = content
         self.summary = summary
 
     @staticmethod
     def from_dict(obj: Any) -> 'Report':
         assert isinstance(obj, dict)
-        content = Content.from_dict(obj.get("content"))
-        summary = from_list(Summary.from_dict, obj.get("summary"))
+        content = ReportContent.from_dict(obj.get("content"))
+        summary = from_list(RichText.from_dict, obj.get("summary"))
         return Report(content, summary)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["content"] = to_class(Content, self.content)
-        result["summary"] = from_list(lambda x: to_class(Summary, x), self.summary)
+        result["content"] = to_class(ReportContent, self.content)
+        result["summary"] = from_list(lambda x: to_class(RichText, x), self.summary)
         return result
 
 

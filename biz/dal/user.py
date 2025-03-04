@@ -26,7 +26,7 @@ class User(Base):
         UUID,
         primary_key=True,
         nullable=False,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid.uuid4,
         comment='Primary key of the users table'
     )
     name = Column(
@@ -55,7 +55,7 @@ class User(Base):
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        default=func.now(),
+        server_default=func.now(),
         comment='UTC timestamp when the user was created'
     )
 
@@ -101,7 +101,7 @@ class Account(Base):
         UUID,
         primary_key=True,
         nullable=False,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid.uuid4,
         comment='Primary record key id of the account'
     )
     user_id = Column(
@@ -142,7 +142,7 @@ class Account(Base):
     created_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
-        default=func.now(),
+        server_default=func.now(),
         comment='UTC timestamp when the account was created'
     )
 

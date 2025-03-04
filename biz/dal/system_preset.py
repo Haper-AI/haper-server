@@ -23,12 +23,12 @@ class PresetMessageTag(Base):
     )
     created_at = Column(
         TIMESTAMP(timezone=True),
-        default=func.now(),
+        server_default=func.now(),
         comment="UTC timestamp when the tag record was first created"
     )
     updated_at = Column(
         TIMESTAMP(timezone=True),
-        default=func.now(),
+        server_default=func.now(),
         onupdate=func.now(),
         comment="UTC timestamp of the last update to the tag record"
     )

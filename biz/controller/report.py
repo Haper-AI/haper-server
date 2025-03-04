@@ -1,37 +1,58 @@
-from uuid import UUID
+from sqlalchemy.orm import Session, make_transient
+
+from biz.model.report.report import report_from_dict
 from biz.service.db import get_session
-from biz.dal.report import Report
+from biz.dal.report import Report, ReportStatus
+from biz.utils.response import ResponseCode
+from biz.model.report import report as report_model
 
-def generate_new_report(user_id: UUID, filters: Optional[Dict] = None):
+def init_report_content():
+    return report_model.Report(summary=[], content=report_model.ReportContent([], None))
+
+
+def start_new_reporting_sequence(session: Session, user_id: str):
+    latest_report = Report.get_latest_by_user_id(session, user_id)
+    if latest_report:
+        raise ResponseCode.UnsupportedAction.create_error("already started reporting sequence")
+
+    # create a new blank report
+    Report.add(session, user_id, {})
+
+
+def end_reporting_sequence(session: Session, user_id: str):
+    latest_report = Report.get_latest_by_user_id(session, user_id)
+    if not latest_report:
+        raise ResponseCode.UnsupportedAction.create_error("reporting sequence already ended")
+    if not latest_report.content: # if latest report doesn't have content, delete it directly
+        Report.delete(session, latest_report.id)
+    else:
+        Report.update(session, latest_report.id, status=ReportStatus.Finalized)
+
+
+def generate_report(user_id: str):
+    with get_session(write=True) as session:
+        latest_report = Report.get_latest_by_user_id(session, user_id)
+        if latest_report and latest_report.content:
+            raise ResponseCode.UnsupportedAction.create_error(
+                "latest report has no content, please wait for new messages")
+        # finalize the report and create a new one
+        Report.update(session, latest_report.id, status=ReportStatus.Finalized)
+        blank_report = Report.add(session, user_id)
+        make_transient(latest_report), make_transient(blank_report)
+
+    return latest_report, blank_report
+
+
+def get_newest_report_summary(user_id: str):
     with get_session(write=False) as session:
-        try:
-            latest_report = Report.get_latest_report(session, user_id)
+        latest_report = Report.get_latest_by_user_id(session, user_id)
 
-            if latest_report and latest_report.content.get("status") == "generating":
-                target_report = latest_report
-            else:
-                target_report = Report.create_blank_report(session, user_id)
+    if latest_report and latest_report.content:
+        report_content = report_from_dict(latest_report.content)
+        return report_content.summary
+    return []
 
-            report_content = {
-                "summary": "Recent activity summary",
-                "stats": {"essential": 18, "non_essential": 7},
-                "status": "completed"
-            }
 
-            target_report.content = report_content
-            session.flush()
-
-            new_blank = Report.create_blank_report(session, user_id)
-            return target_report
-
-        except Exception as e:
-            session.rollback()
-            raise RuntimeError(f"Report generation failed: {str(e)}")
-
-def get_newest_report_summary(user_id: UUID):
-    with get_session(write=False) as session:
-        return Report.get_newest_by_user(session, user_id)
-
-def list_history_reports(user_id: UUID):
+def list_history_reports(user_id: str):
     with get_session(write=False) as session:
         return Report.list_by_user(session, user_id)

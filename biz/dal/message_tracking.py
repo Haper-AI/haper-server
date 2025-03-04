@@ -50,12 +50,12 @@ class MessageTrackingRecord(Base):
     )
     created_at = Column(
         TIMESTAMP(timezone=True),
-        default=func.now(),
+        server_default=func.now(),
         comment="UTC timestamp when the message tracking record was first created"
     )
     updated_at = Column(
         TIMESTAMP(timezone=True),
-        default=func.now(),
+        server_default=func.now(),
         onupdate=func.now(),
         comment="UTC timestamp of the last update to the message tracking record"
     )
@@ -75,6 +75,10 @@ class MessageTrackingRecord(Base):
     @classmethod
     def list_by_user_id(cls, session: Session, user_id: str):
         return session.query(cls).filter_by(user_id=user_id).all()
+
+    @classmethod
+    def count_ongoing_by_user_id(cls, session: Session, user_id: str):
+        return session.query(cls).filter_by(user_id=user_id, status=MessageTrackingStatus.ONGOING).count()
 
     @classmethod
     def get_by_user_id_and_account_id(cls, session: Session, user_id: str, account_id: str):

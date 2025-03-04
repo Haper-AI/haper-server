@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy.orm import make_transient
 
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
+from biz.dal.report import Report
 from biz.dal.user import Account, User
 from biz.handler.middleware import gen_jwt_auth
 from biz.service.db import get_session
@@ -27,6 +28,7 @@ def new_user_account_tracking_record():
         record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
             "some_info_key": "some_info_value"
         })
+        Report.add(session, user.id)
 
         make_transient(user), make_transient(account), make_transient(record)
     return user, account, record

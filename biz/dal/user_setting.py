@@ -25,12 +25,12 @@ class UserSetting(Base):
     )
     created_at = Column(
         TIMESTAMP(timezone=True),
-        default=func.now(),
+        server_default=func.now(),
         comment="Timestamp when the user setting was created"
     )
     updated_at = Column(
         TIMESTAMP(timezone=True),
-        default=func.now(),
+        server_default=func.now(),
         onupdate=func.now(),
         comment="Timestamp when the user setting was last updated"
     )

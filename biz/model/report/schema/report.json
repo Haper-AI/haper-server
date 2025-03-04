@@ -9,11 +9,11 @@
                 "summary": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/Summary"
+                        "$ref": "#/definitions/RichText"
                     }
                 },
                 "content": {
-                    "$ref": "#/definitions/Content"
+                    "$ref": "#/definitions/ReportContent"
                 }
             },
             "required": [
@@ -22,7 +22,7 @@
             ],
             "title": "Report"
         },
-        "Content": {
+        "ReportContent": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
@@ -37,10 +37,9 @@
                 }
             },
             "required": [
-                "content_sources",
-                "gmail"
+                "content_sources"
             ],
-            "title": "Content"
+            "title": "ReportContent"
         },
         "Gmail": {
             "type": "object",
@@ -110,7 +109,7 @@
             ],
             "title": "MailReportItem"
         },
-        "Summary": {
+        "RichText": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
@@ -130,7 +129,7 @@
             "required": [
                 "type"
             ],
-            "title": "Summary"
+            "title": "RichText"
         },
         "Annotations": {
             "type": "object",
