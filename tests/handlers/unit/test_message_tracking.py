@@ -35,7 +35,7 @@ def new_user_account_tracking_record():
 
 
 @pytest.fixture(scope="module")
-def patch_build_gmail_client():
+def patch_gmail_watch_stop():
     # config gmail client api mock
     mock_gmail_client = MagicMock()
     mock_gmail_client.users().watch.return_value.execute.return_value = {
@@ -63,7 +63,7 @@ class TestMessageTrackingGetStatus:
 
 class TestMessageTrackingStart:
     class TestSuccess:
-        @pytest.mark.usefixtures("patch_build_gmail_client")
+        @pytest.mark.usefixtures("patch_gmail_watch_stop")
         def test_success_by_exist_google_account(self, client, new_user_account):
             user, account = new_user_account
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
@@ -74,7 +74,7 @@ class TestMessageTrackingStart:
             assert response.status_code == 200
             assert response.get_json()['data']['new_tracking_status']
 
-        @pytest.mark.usefixtures("patch_build_gmail_client")
+        @pytest.mark.usefixtures("patch_gmail_watch_stop")
         def test_success_by_new_google_account(self, client, new_user):
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
@@ -111,7 +111,7 @@ class TestMessageTrackingStart:
 
 class TestMessageTrackingStop:
 
-    @pytest.mark.usefixtures("patch_build_gmail_client")
+    @pytest.mark.usefixtures("patch_gmail_watch_stop")
     def test_success(self, client, new_user_account_tracking_record):
         user, account, _ = new_user_account_tracking_record
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))

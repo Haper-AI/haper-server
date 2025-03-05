@@ -1,0 +1,72 @@
+{
+    "$id": "rich_text.json",
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$ref": "#/definitions/RichText",
+    "definitions": {
+        "RichText": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["text", "email"]
+                },
+                "text": {
+                    "$ref": "#/definitions/Text"
+                },
+                "annotations": {
+                    "$ref": "#/definitions/Annotations"
+                },
+                "email": {
+                    "$ref": "#/definitions/Email"
+                }
+            },
+            "required": [
+                "type"
+            ],
+            "title": "RichText"
+        },
+        "Annotations": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "bold": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+            ],
+            "title": "Annotations"
+        },
+        "Email": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "email",
+                "name"
+            ],
+            "title": "Email"
+        },
+        "Text": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "content": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "content"
+            ],
+            "title": "Text"
+        }
+    }
+}

@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Optional, Union
 
 from sqlalchemy import (
     Column,
@@ -68,7 +68,7 @@ class User(Base):
         return user
 
     @classmethod
-    def get_by_id(cls, session: Session, user_id: str):
+    def get_by_id(cls, session: Session, user_id: Union[str, UUID]):
         """
         Fetch a user by their ID from the database.
 
@@ -147,7 +147,7 @@ class Account(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: str, provider: str, provider_account_id: str,
+    def add(cls, session: Session, user_id: Union[str, UUID], provider: str, provider_account_id: str,
             access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None,
             email: Optional[str]=None):
         account = cls(
@@ -164,11 +164,11 @@ class Account(Base):
         return account
 
     @classmethod
-    def list_by_user_id(cls, session: Session, user_id: str):
+    def list_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
         return session.query(cls).filter_by(user_id=user_id).all()
 
     @classmethod
-    def get_by_id(cls, session: Session, account_id: str):
+    def get_by_id(cls, session: Session, account_id: Union[str, UUID]):
         return session.query(cls).filter_by(id=account_id).first()
 
     @classmethod
@@ -180,8 +180,8 @@ class Account(Base):
         return session.query(cls).filter_by(email=email, provider="google").first()
 
     @classmethod
-    def update_tokens(cls, session: Session, account_id: str,
-                      access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None):
+    def update(cls, session: Session, account_id: Union[str, UUID],
+               access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None):
         updates = {
             'access_token': access_token,
         }

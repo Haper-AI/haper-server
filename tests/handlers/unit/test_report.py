@@ -8,10 +8,10 @@ from biz.dal.user import User
 from biz.handler.middleware import gen_jwt_auth
 from biz.service.db import get_session
 from biz.model.report import report as report_model
+from biz.model.report import rich_text as rich_text_model
 from biz.utils.env import RuntimeEnv
 
 from tests import generate_random_gmail
-from .conftest import client, new_user, new_user_account
 
 
 @pytest.fixture
@@ -31,15 +31,15 @@ def new_user_report():
         r = report_model.Report(
             summary=[
                 report_model.RichText(
-                    type="text",
-                    text=report_model.Text("this is a text"),
+                    type=rich_text_model.TypeEnum.TEXT,
+                    text=rich_text_model.Text("this is a text"),
                     email=None,
                     annotations=None,
                 ),
                 report_model.RichText(
-                    type="email",
+                    type=rich_text_model.TypeEnum.EMAIL,
                     text=None,
-                    email=report_model.Email(email=email, name="email name"),
+                    email=rich_text_model.Email(email=email, name="email name"),
                     annotations=None,
                 )
             ],

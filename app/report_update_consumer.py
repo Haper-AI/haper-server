@@ -1,13 +1,12 @@
-import base64
 import json
-import re
-from datetime import datetime, timezone
-from email.utils import parsedate_tz, mktime_tz
+from datetime import datetime
 
 from googleapiclient.errors import HttpError
 
+from biz.controller import report_update as report_update_ctrl
+from biz.controller.report_update import RawGmailInfo
 from biz.dal.user import Account
-from biz.model.report.report_update_message import report_update_message_from_dict
+from biz.model.report.report_update_message import report_update_message_from_dict, ReportUpdateMessage
 from biz.service.db import get_session, init_db
 from biz.service.sqs import get_sqs_client, init_sqs
 from biz.utils.env import RuntimeEnv
@@ -15,64 +14,8 @@ from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
 
 
-class GmailInfo:
-    snippet: str
-    mime_type: str
-    date: datetime
-    sender_name: str
-    sender_email: str
-    subject: str
-    body: str
 
-    def __init__(self):
-        pass
-
-
-def extract_gmail_info(email_info):
-    snippet = email_info["snippet"]
-    payload = email_info["payload"]
-    headers = payload["headers"]
-    extracted_gmail_info = GmailInfo()
-    extracted_gmail_info.snippet = snippet
-    extracted_gmail_info.mime_type = payload["mimeType"]
-    for header in headers:
-        if header["name"] == "Date":
-            raw_date = header["value"]
-            parsed_time = parsedate_tz(raw_date)
-            extracted_gmail_info.date = datetime.fromtimestamp(mktime_tz(parsed_time), timezone.utc)
-        elif header["name"] == "From":
-            match = re.match(r"(.+?)\s*<(.+?)>", header['value'])
-            if match:
-                extracted_gmail_info.sender_name = match.group(1).strip()
-                extracted_gmail_info.sender_email = match.group(2).strip()
-        elif header["name"] == "Subject":
-            extracted_gmail_info.subject = header['value']
-
-    # get email body
-    body = ""
-    if extracted_gmail_info.mime_type == 'multipart/alternative':
-        parts = payload["parts"]
-        # prefer html part first
-        for part in parts:
-            if part["mimeType"] == "text/html":
-                body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
-                break
-
-        # if not html part, default to use the first part
-        if not body:
-            body = base64.urlsafe_b64decode(parts[0]["body"]["data"]).decode("utf-8")
-
-    elif extracted_gmail_info.mime_type == "text/plain" or extracted_gmail_info.mime_type == "text/html":
-        body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
-
-    extracted_gmail_info.body = body
-
-    return extracted_gmail_info
-
-
-def handle_message(message_body):
-    report_update_message = report_update_message_from_dict(message_body)
-
+def handle_message(report_update_message: ReportUpdateMessage):
     if report_update_message.messages.gmail:  # handle gmail messages
         gmail_account_info = report_update_message.messages.gmail.account_info
         new_gmail_messages = report_update_message.messages.gmail.new_messages
@@ -92,20 +35,25 @@ def handle_message(message_body):
             datetime.fromtimestamp(account.expires_at)
         )
 
+        emails = []
         for new_gmail_msg in new_gmail_messages:
             try:
                 email_info = gmail_api_client.users().messages().get(
                     userId="me",
                     id=new_gmail_msg.message_id,
                 ).execute()
-
-                # use llm process email info
-                extracted_gmail_info = extract_gmail_info(email_info)
-                print(extracted_gmail_info)
+                emails.append(RawGmailInfo(new_gmail_msg.message_id, new_gmail_msg.thread_id, email_info))
             except HttpError as e:
                 if e.resp.status == 404:
                     logger.warning(f"Message not found: {new_gmail_msg.message_id}")
                     continue
+
+        # use llm process email info
+        report_update_ctrl.update_report_with_gmail_message(
+            report_update_message.user_info.user_id,
+            report_update_message.report_info.report_id,
+            emails,
+        )
 
 
 def init():
@@ -143,7 +91,7 @@ if __name__ == '__main__':
                     continue
 
                 try:
-                    handle_message(json.loads(message['Body']))
+                    handle_message(report_update_message_from_dict(json.loads(message['Body'])))
                 except Exception as e:
                     logger.error(f"Error processing message: {message['MessageId']}, error: {e}")
                     continue

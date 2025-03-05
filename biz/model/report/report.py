@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Any, Optional, TypeVar, Callable, Type, cast
 import dateutil.parser
 
+from biz.model.report.rich_text import RichText
 
 T = TypeVar("T")
 
@@ -132,98 +133,6 @@ class ReportContent:
         result["content_sources"] = from_list(from_str, self.content_sources)
         if self.gmail is not None:
             result["gmail"] = from_union([lambda x: to_class(Gmail, x), from_none], self.gmail)
-        return result
-
-
-class Annotations:
-    bold: Optional[bool]
-
-    def __init__(self, bold: Optional[bool]) -> None:
-        self.bold = bold
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'Annotations':
-        assert isinstance(obj, dict)
-        bold = from_union([from_bool, from_none], obj.get("bold"))
-        return Annotations(bold)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        if self.bold is not None:
-            result["bold"] = from_union([from_bool, from_none], self.bold)
-        return result
-
-
-class Email:
-    email: str
-    name: str
-
-    def __init__(self, email: str, name: str) -> None:
-        self.email = email
-        self.name = name
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'Email':
-        assert isinstance(obj, dict)
-        email = from_str(obj.get("email"))
-        name = from_str(obj.get("name"))
-        return Email(email, name)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["email"] = from_str(self.email)
-        result["name"] = from_str(self.name)
-        return result
-
-
-class Text:
-    content: str
-
-    def __init__(self, content: str) -> None:
-        self.content = content
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'Text':
-        assert isinstance(obj, dict)
-        content = from_str(obj.get("content"))
-        return Text(content)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["content"] = from_str(self.content)
-        return result
-
-
-class RichText:
-    annotations: Optional[Annotations]
-    email: Optional[Email]
-    text: Optional[Text]
-    type: str
-
-    def __init__(self, annotations: Optional[Annotations], email: Optional[Email], text: Optional[Text], type: str) -> None:
-        self.annotations = annotations
-        self.email = email
-        self.text = text
-        self.type = type
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'RichText':
-        assert isinstance(obj, dict)
-        annotations = from_union([Annotations.from_dict, from_none], obj.get("annotations"))
-        email = from_union([Email.from_dict, from_none], obj.get("email"))
-        text = from_union([Text.from_dict, from_none], obj.get("text"))
-        type = from_str(obj.get("type"))
-        return RichText(annotations, email, text, type)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        if self.annotations is not None:
-            result["annotations"] = from_union([lambda x: to_class(Annotations, x), from_none], self.annotations)
-        if self.email is not None:
-            result["email"] = from_union([lambda x: to_class(Email, x), from_none], self.email)
-        if self.text is not None:
-            result["text"] = from_union([lambda x: to_class(Text, x), from_none], self.text)
-        result["type"] = from_str(self.type)
         return result
 
 

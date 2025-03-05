@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -61,7 +61,8 @@ class MessageTrackingRecord(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: str, account_id: str, extra_info: Optional[dict] = None):
+    def add(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID],
+            extra_info: Optional[dict] = None):
         record = cls(
             user_id=user_id,
             account_id=account_id,
@@ -73,19 +74,19 @@ class MessageTrackingRecord(Base):
         return record
 
     @classmethod
-    def list_by_user_id(cls, session: Session, user_id: str):
+    def list_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
         return session.query(cls).filter_by(user_id=user_id).all()
 
     @classmethod
-    def count_ongoing_by_user_id(cls, session: Session, user_id: str):
+    def count_ongoing_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
         return session.query(cls).filter_by(user_id=user_id, status=MessageTrackingStatus.ONGOING).count()
 
     @classmethod
-    def get_by_user_id_and_account_id(cls, session: Session, user_id: str, account_id: str):
+    def get_by_user_id_and_account_id(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID]):
         return session.query(cls).filter_by(user_id=user_id, account_id=account_id).first()
 
     @classmethod
-    def update(cls, session: Session, user_id: str, account_id: str,
+    def update(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID],
                status: Optional[MessageTrackingStatus] = None,
                extra_info: Optional[dict] = None):
         updates = {}

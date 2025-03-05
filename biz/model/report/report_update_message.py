@@ -118,6 +118,24 @@ class Messages:
         return result
 
 
+class ReportInfo:
+    report_id: str
+
+    def __init__(self, report_id: str) -> None:
+        self.report_id = report_id
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'ReportInfo':
+        assert isinstance(obj, dict)
+        report_id = from_str(obj.get("report_id"))
+        return ReportInfo(report_id)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["report_id"] = from_str(self.report_id)
+        return result
+
+
 class UserInfo:
     user_id: str
 
@@ -138,22 +156,26 @@ class UserInfo:
 
 class ReportUpdateMessage:
     messages: Messages
+    report_info: ReportInfo
     user_info: UserInfo
 
-    def __init__(self, messages: Messages, user_info: UserInfo) -> None:
+    def __init__(self, messages: Messages, report_info: ReportInfo, user_info: UserInfo) -> None:
         self.messages = messages
+        self.report_info = report_info
         self.user_info = user_info
 
     @staticmethod
     def from_dict(obj: Any) -> 'ReportUpdateMessage':
         assert isinstance(obj, dict)
         messages = Messages.from_dict(obj.get("messages"))
+        report_info = ReportInfo.from_dict(obj.get("report_info"))
         user_info = UserInfo.from_dict(obj.get("user_info"))
-        return ReportUpdateMessage(messages, user_info)
+        return ReportUpdateMessage(messages, report_info, user_info)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["messages"] = to_class(Messages, self.messages)
+        result["report_info"] = to_class(ReportInfo, self.report_info)
         result["user_info"] = to_class(UserInfo, self.user_info)
         return result
 

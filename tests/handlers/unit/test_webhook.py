@@ -3,7 +3,11 @@ import json
 import uuid
 from datetime import timedelta, datetime
 
-from .conftest import client
+from sqlalchemy.orm import make_transient
+
+from biz.dal.report import Report
+from biz.dal.user import User
+from biz.service.db import get_session
 from tests import generate_random_string, generate_random_gmail
 from unittest.mock import patch, MagicMock
 
@@ -12,13 +16,19 @@ class TestGmailSyncWebhook:
     @patch('biz.controller.message_sync.build_gmail_client')
     @patch('biz.dal.user.Account.get_by_gmail', return_value=MagicMock())
     def test_success(self, mock_account_get_by_gmail, mock_build_gmail_client, client):
+        email = generate_random_gmail(8)
+        with get_session(write=True) as session:
+            user =  User.add(session, "some user name", email)
+            Report.add(session, user.id , {})
+            make_transient(user)
+
         # configure account table
         mock_account = MagicMock()
         mock_account.id = uuid.uuid4()
         mock_account.access_token = generate_random_string(10)
         mock_account.refresh_token = generate_random_string(10)
         mock_account.expires_at = (datetime.now() + timedelta(hours=1)).timestamp()
-        mock_account.user_id = generate_random_string(10)
+        mock_account.user_id = user.id
         mock_account.provider = 'gmail'
         mock_account.provider_account_id = generate_random_string(10)
         mock_account_get_by_gmail.return_value = mock_account
@@ -46,7 +56,7 @@ class TestGmailSyncWebhook:
 
         mock_build_gmail_client.return_value = (mock_gmail_client, mock_credential)
 
-        email = generate_random_gmail(8)
+
 
         response = client.post('/api/v1/webhook/gmail-sync', json={
             'message': {

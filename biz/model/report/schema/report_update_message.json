@@ -18,6 +18,7 @@
             },
             "required": [
                 "messages",
+                "report_info",
                 "user_info"
             ],
             "title": "ReportUpdateMessage"

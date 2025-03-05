@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 
 from sqlalchemy import Column, String, TIMESTAMP, ForeignKey, func, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
@@ -36,7 +36,7 @@ class UserSetting(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: str, key_message_tags: [str]):
+    def add(cls, session: Session, user_id: Union[str, UUID], key_message_tags: [str]):
         setting = cls(
             user_id=user_id,
             key_message_tags=key_message_tags,
@@ -46,7 +46,7 @@ class UserSetting(Base):
         return setting
 
     @classmethod
-    def get_by_user_id(cls, session: Session, user_id: str):
+    def get_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
         return session.query(cls).filter_by(user_id=user_id).first()
 
     @classmethod

@@ -87,7 +87,7 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
             tracking_record.updated_at = datetime.now(timezone.utc)
 
             if credential.token != account.access_token:
-                Account.update_tokens(
+                Account.update(
                     session,
                     account.id,
                     credential.token,
@@ -187,7 +187,7 @@ def end_message_tracking(user_id: str, account_id: str):
             gmail_api_client.users().stop(userId='me').execute()
 
             if credential.token != account.access_token:
-                Account.update_tokens(
+                Account.update(
                     session,
                     account.id,
                     credential.token,

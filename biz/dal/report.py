@@ -1,5 +1,5 @@
 import uuid
-from typing import Dict
+from typing import Dict, Union
 
 from sqlalchemy import Column, Boolean, ForeignKey, TIMESTAMP, String
 
@@ -75,7 +75,7 @@ class Report(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: str, content: dict):
+    def add(cls, session: Session, user_id: Union[str, UUID], content: dict):
         blank_report = cls(
             user_id=user_id,
             status=ReportStatus.Appending,
@@ -86,7 +86,7 @@ class Report(Base):
         return blank_report
 
     @classmethod
-    def update(cls, session: Session, report_id: str,
+    def update(cls, session: Session, report_id: Union[str, UUID],
                status: ReportStatus = None, content: Dict = None):
         updates = {}
         if status:
@@ -98,7 +98,11 @@ class Report(Base):
         session.query(cls).filter_by(id=report_id).update(updates)
 
     @classmethod
-    def get_latest_by_user_id(cls, session: Session, user_id: str):
+    def get_by_id(cls, session: Session, report_id: Union[str, UUID]):
+        return session.query(cls).filter_by(id=report_id).first()
+
+    @classmethod
+    def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
         return (
             session.query(cls)
             .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Appending)
@@ -107,7 +111,7 @@ class Report(Base):
         )
 
     @classmethod
-    def list_by_user(cls, session: Session, user_id: str):
+    def list_by_user(cls, session: Session, user_id: Union[str, UUID]):
         return (
             session.query(cls)
             .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Finalized)
@@ -116,9 +120,9 @@ class Report(Base):
         )
 
     @classmethod
-    def mark_deleted(cls, session: Session, report_id: str):
+    def mark_deleted(cls, session: Session, report_id: Union[str, UUID]):
         session.query(cls).filter_by(id=report_id).update({'is_deleted': True})
 
     @classmethod
-    def delete(cls, session: Session, report_id: str):
+    def delete(cls, session: Session, report_id: Union[str, UUID]):
         session.query(cls).filter_by(id=report_id).delete()

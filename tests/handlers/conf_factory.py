@@ -41,7 +41,13 @@ def new_handler_test_conf(scope, db_name: str, sqs_queue_name: str):
         # set up sqs
         init_sqs()
         RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL = get_sqs_client(). \
-            create_queue(QueueName=sqs_queue_name)["QueueUrl"]
+            create_queue(
+            QueueName=sqs_queue_name if sqs_queue_name.endswith(".fifo") else f"{sqs_queue_name}.fifo",
+            Attributes={
+                "FifoQueue": "true",
+                "ContentBasedDeduplication": "true"
+            }
+        )["QueueUrl"]
 
         # other setup can go here
 

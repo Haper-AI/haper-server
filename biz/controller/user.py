@@ -115,7 +115,7 @@ def login_user_by_oauth(provider: str, provider_account_id: str,
             raise ResponseCode.InternalUnknownError.create_error(f"user not found for account {provider_account_id}")
 
         # update account
-        Account.update_tokens(session, account.id, access_token, refresh_token, expires_at)
+        Account.update(session, account.id, access_token, refresh_token, expires_at)
 
         make_transient(user)
     return user
