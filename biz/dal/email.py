@@ -14,7 +14,7 @@ from sqlalchemy import (
     UniqueConstraint
 )
 from sqlalchemy.orm import Session
-from pgvector.sqlalchemy import VECTOR
+from pgvector.sqlalchemy import Vector
 
 from .base import Base
 
@@ -61,7 +61,12 @@ class Email(Base):
     sender = Column(
         String(128),
         nullable=False,
-        comment='Email address of the sender'
+        comment='Name and email address of the sender'
+    )
+    receiver = Column(
+        String(128),
+        nullable=False,
+        comment='Email address of the receiver'
     )
     subject = Column(
         Text,
@@ -82,7 +87,7 @@ class Email(Base):
         comment='Summary of the email content provided by the LLM'
     )
     summary_embedding = Column(
-        VECTOR(dim=768)
+        Vector(dim=768)
     )
     llm_category = Column(
         String(16),
@@ -115,15 +120,6 @@ class Email(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: Union[str, UUID]):
-        email = cls(
-            user_id=user_id,
-        )
-        session.add(email)
-        session.flush()
-        return email
-
-    @classmethod
     def list_by_similarity(cls, session: Session, user_id: Union[str, UUID], summary_embedding: List[float],
                            cosine_distance_boundary: float, limit: int):
         cosine_distance = cls.summary_embedding.cosine_distance(summary_embedding)
@@ -138,7 +134,7 @@ class Email(Base):
                 cls.modified_action,
             )
             .filter_by(user_id=user_id)
-            .filter(cosine_distance >= cosine_distance_boundary)
+            .filter(cosine_distance <= cosine_distance_boundary)
             .order_by(cosine_distance)
             .limit(limit)
             .all()

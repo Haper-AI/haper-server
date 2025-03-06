@@ -31,7 +31,8 @@ def new_user_account():
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(session, user.id, "google", generate_random_string(16),
                               "access_token", "refresh_token",
-                              expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()))
+                              expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+                              email=email)
 
         make_transient(user), make_transient(account)
 

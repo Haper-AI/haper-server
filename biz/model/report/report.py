@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Any, Optional, TypeVar, Callable, Type, cast
+from typing import List, Any, Optional, Dict, TypeVar, Callable, Type, cast
 import dateutil.parser
 
 from biz.model.report.rich_text import RichText
@@ -45,6 +45,16 @@ def from_bool(x: Any) -> bool:
     return x
 
 
+def from_dict(f: Callable[[Any], T], x: Any) -> Dict[str, T]:
+    assert isinstance(x, dict)
+    return {k: f(v) for (k, v) in x.items()}
+
+
+def from_int(x: Any) -> int:
+    assert isinstance(x, int) and not isinstance(x, bool)
+    return x
+
+
 class MailReportItem:
     action: str
     message_id: str
@@ -55,7 +65,8 @@ class MailReportItem:
     tags: List[str]
     thread_id: str
 
-    def __init__(self, action: str, message_id: str, receive_at: datetime, sender: str, subject: str, summary: str, tags: List[str], thread_id: str) -> None:
+    def __init__(self, action: str, message_id: str, receive_at: datetime, sender: str, subject: str, summary: str,
+                 tags: List[str], thread_id: str) -> None:
         self.action = action
         self.message_id = message_id
         self.receive_at = receive_at
@@ -138,22 +149,26 @@ class ReportContent:
 
 class Report:
     content: ReportContent
+    messages_in_queue: Dict[str, int]
     summary: List[RichText]
 
-    def __init__(self, content: ReportContent, summary: List[RichText]) -> None:
+    def __init__(self, content: ReportContent, messages_in_queue: Dict[str, int], summary: List[RichText]) -> None:
         self.content = content
+        self.messages_in_queue = messages_in_queue
         self.summary = summary
 
     @staticmethod
     def from_dict(obj: Any) -> 'Report':
         assert isinstance(obj, dict)
         content = ReportContent.from_dict(obj.get("content"))
+        messages_in_queue = from_dict(from_int, obj.get("messages_in_queue"))
         summary = from_list(RichText.from_dict, obj.get("summary"))
-        return Report(content, summary)
+        return Report(content, messages_in_queue, summary)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["content"] = to_class(ReportContent, self.content)
+        result["messages_in_queue"] = from_dict(from_int, self.messages_in_queue)
         result["summary"] = from_list(lambda x: to_class(RichText, x), self.summary)
         return result
 

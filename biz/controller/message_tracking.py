@@ -5,7 +5,6 @@ from sqlalchemy.orm import make_transient
 
 from biz.controller.report import start_new_reporting_sequence, end_reporting_sequence
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
-from biz.dal.report import Report
 from biz.dal.user import Account
 from biz.service.db import get_session
 from biz.utils.env import RuntimeEnv

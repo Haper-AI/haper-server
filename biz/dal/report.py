@@ -98,17 +98,21 @@ class Report(Base):
         session.query(cls).filter_by(id=report_id).update(updates)
 
     @classmethod
-    def get_by_id(cls, session: Session, report_id: Union[str, UUID]):
-        return session.query(cls).filter_by(id=report_id).first()
+    def get_by_id(cls, session: Session, report_id: Union[str, UUID], for_update=False):
+        q = session.query(cls).filter_by(id=report_id)
+        if for_update:
+            q = q.with_for_update()
+        return q.first()
 
     @classmethod
-    def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
-        return (
-            session.query(cls)
-            .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Appending)
-            .order_by(cls.created_at.desc())
-            .first()
-        )
+    def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID], for_update=False):
+        q = (session.query(cls)
+             .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Appending)
+             .order_by(cls.created_at.desc())
+             )
+        if for_update:
+            q = q.with_for_update()
+        return q.first()
 
     @classmethod
     def list_by_user(cls, session: Session, user_id: Union[str, UUID]):

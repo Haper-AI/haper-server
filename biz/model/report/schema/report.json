@@ -4,12 +4,18 @@
     "definitions": {
         "Report": {
             "type": "object",
-            "additionalProperties": false,
+            "additionalProperties": true,
             "properties": {
+                "messages_in_queue": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
                 "summary": {
                     "type": "array",
                     "items": {
-                        "$ref": "rich_text.json#/definitions/RichText"
+                        "$ref": "./rich_text.json#/definitions/RichText"
                     }
                 },
                 "content": {
@@ -17,6 +23,7 @@
                 }
             },
             "required": [
+                "messages_in_queue",
                 "content",
                 "summary"
             ],

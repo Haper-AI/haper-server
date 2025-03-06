@@ -12,6 +12,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from biz.dal.email import Email
 from biz.dal.report import MessageCategory, MessageAction, Report
 from biz.dal.user_setting import UserSetting
+from biz.model.report.rich_text import rich_text_from_dict
 from biz.service.db import get_session
 from biz.model.report import report as report_model
 from biz.utils import schema_loader
@@ -25,11 +26,14 @@ class RawGmailInfo:
 
 
 class GmailInfo:
+    marked_promotion: bool
     snippet: str
     mime_type: str
     receive_at: datetime
+    sender: str
     sender_name: str
     sender_email: str
+    to: str
     subject: str
     body: str
 
@@ -87,10 +91,12 @@ example_summary = json.dumps([
 
 
 def extract_gmail_info(email_info: dict):
+    label_ids = email_info["labelIds"]
     snippet = email_info["snippet"]
     payload = email_info["payload"]
     headers = payload["headers"]
     extracted_gmail_info = GmailInfo()
+    extracted_gmail_info.marked_promotion = "CATEGORY_PROMOTION" in label_ids
     extracted_gmail_info.snippet = snippet
     extracted_gmail_info.mime_type = payload["mimeType"]
     for header in headers:
@@ -99,10 +105,13 @@ def extract_gmail_info(email_info: dict):
             parsed_time = parsedate_tz(raw_date)
             extracted_gmail_info.receive_at = datetime.fromtimestamp(mktime_tz(parsed_time), timezone.utc)
         elif header["name"] == "From":
+            extracted_gmail_info.sender = header["value"]
             match = re.match(r"(.+?)\s*<(.+?)>", header['value'])
             if match:
                 extracted_gmail_info.sender_name = match.group(1).strip()
                 extracted_gmail_info.sender_email = match.group(2).strip()
+        elif header["name"] == "To":
+            extracted_gmail_info.to = header["value"]
         elif header["name"] == "Subject":
             extracted_gmail_info.subject = header['value']
 
@@ -139,11 +148,15 @@ summarize_email_prompt_template = ChatPromptTemplate.from_template(
     
     2. Generate a list of tags about the email
     
-    3. Must output the result in json format, below is the format definition:
-      {
-        "summary": "string, the summary of the current email",
-        "tags": "string array, the tags of the current email",
-      }
+    3. Must output the result in json format that contains those keys: 
+      - summary: string value, the summary text of current email
+      - tags: array of string value, a list of tag about current email
+      
+    Given Email:
+      - Sender: {email_sender}
+      - Subject: {email_subject}
+      - Body: {email_body}
+      - Marked Promotion: {email_marked_promotion}
     """
 )
 
@@ -154,8 +167,8 @@ classify_email_prompt_template = ChatPromptTemplate.from_template(
 
 
     Guidelines:
-    1. Classify an email into one of those categories: [{fixed_categories}]
-      2.2 Current user is more focused on those emails tags: [{user_key_tags}]
+    1. Classify an email into one of those categories: {fixed_categories}
+      2.2 Current user is more focused on those emails tags: {user_key_tags}
       2.3 If current user has no focused email tags, you may pay more attention to those messages:
         - Work-related messages
         - Financial updates
@@ -163,7 +176,7 @@ classify_email_prompt_template = ChatPromptTemplate.from_template(
         - Personal correspondence
         - Scheduled events
 
-    2. Generate one of those actions for current email: [{fixed_actions}] 
+    2. Generate one of those actions for current email: {fixed_actions}
 
     3. If there are the memory about the category and action for similar email of current user, you should also 
     take those information into consideration. Each memory item will include:
@@ -173,22 +186,20 @@ classify_email_prompt_template = ChatPromptTemplate.from_template(
       - user confirmed category
       - user confirmed action
 
-    4. Must output the result in json format, below is the format definition:
-      {
-        "category": "string, the category of the current email",
-        "action": "string, the action of the current email",
-      }
+    4. Must output the result in json format that contains those keys:
+      - category: string value, the category of the current email",
+      - action: string value, the action of the current email",
 
 
     History of users emails:
     {history_examples}
 
     Given Email:
-    Sender: {email_sender}
-    Subject: {email_subject}
-    Body: {email_body}
-    Summary_by_llm: {summary_by_llm}
-    Tags_by_llm: {tags_by_llm}
+      - Sender: {email_sender}
+      - Subject: {email_subject}
+      - Marked Promotion: {email_marked_promotion}
+      - Summary: {summary_by_llm}
+      - Tags: {tags_by_llm}
     """
 )
 
@@ -206,8 +217,8 @@ update_summary_template = ChatPromptTemplate.from_template(
     {example_summary}
     
     4. New Incoming Messages are a list of json object, for each item, it includes:
-      - sender name
-      - sender email
+      - sender_name
+      - sender_email
       - subject
       - summary
       - tags
@@ -227,15 +238,19 @@ update_summary_template = ChatPromptTemplate.from_template(
 def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: List[RawGmailInfo]):
     with get_session(write=False) as session:
         # get user focused tags
-        user_key_tags = UserSetting.get_by_user_id(session, user_id).key_message_tags
+        user_setting = UserSetting.get_by_user_id(session, user_id)
+        if user_setting is None:
+            user_key_tags = []
+        else:
+            user_key_tags = user_setting.key_message_tags
 
     # define llm model
     chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
     embedding_model = init_embeddings("text-embedding-3-small", provider="openai", dimensions=768)
 
-    fixed_categories = ", ".join([MessageCategory.Essential, MessageCategory.NonEssential])
-    fixed_actions = ", ".join([MessageAction.Read, MessageAction.Delete, MessageAction.Reply])
-    user_key_tags = ", ".join(user_key_tags)
+    fixed_categories = json.dumps([MessageCategory.Essential, MessageCategory.NonEssential])
+    fixed_actions = json.dumps([MessageAction.Read, MessageAction.Delete, MessageAction.Reply])
+    user_key_tags = json.dumps(user_key_tags)
 
     email_db_record_to_add: List[Email] = []
     essential_gmails: List[report_model.MailReportItem] = []
@@ -246,44 +261,50 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
 
         # use llm to inference
         # generate summary and tags from email
-        summary_response = chat_model.invoke(summarize_email_prompt_template.format(
+        formated_prompt = summarize_email_prompt_template.format(
             words_limit=50,
-
-        ))
-        summary_json = json.loads(summary_response.content)
+            email_sender=extracted_gmail.sender_email,
+            email_subject=extracted_gmail.subject,
+            email_body=extracted_gmail.body,
+            email_marked_promotion=extracted_gmail.marked_promotion,
+        )
+        email_summary_response = chat_model.invoke(formated_prompt)
+        email_summary_json = json.loads(email_summary_response.content)
 
         # get embedding for summary
-        summary_embedding = embedding_model.invoke(summary_json['summary'])
+        summary_embedding = embedding_model.invoke(email_summary_json['summary'])
 
         # get similar email history
         with get_session(write=False) as session:
             email_history = Email.list_by_similarity(
                 session, user_id, summary_embedding,
-                cosine_distance_boundary=0.7, limit=10
+                cosine_distance_boundary=0.2, limit=10
             )
 
         history_examples = None
         if email_history:
-            history_examples = "\n".join([json.dumps({
+            history_examples_json_list = [json.dumps({
                 "sender": e.sender,
                 "subject": e.subject,
                 "summary": e.summary,
                 "category": e.modified_category if e.modified_category else e.llm_category,
                 "action": e.modified_action if e.modified_action else e.llm_action,
-            }, ensure_ascii=False) for e in email_history])
+            }, ensure_ascii=False) for e in email_history]
+            history_examples = "\n    ".join([f'  - {e}' for e in history_examples_json_list])
 
         # generate suggested category and action for email
-        classify_response = chat_model.invoke(classify_email_prompt_template.format(
+        formated_prompt = classify_email_prompt_template.format(
             fixed_categories=fixed_categories,
             user_key_tags=user_key_tags,
             fixed_actions=fixed_actions,
             history_examples=history_examples,
             email_sender=extracted_gmail.sender_email,
             email_subject=extracted_gmail.subject,
-            email_body=extracted_gmail.body,
-            summary_by_llm=summary_json["summary"],
-            tags_by_llm=summary_json["tags"],
-        ))
+            email_marked_promotion=extracted_gmail.marked_promotion,
+            summary_by_llm=email_summary_json["summary"],
+            tags_by_llm=email_summary_json["tags"],
+        )
+        classify_response = chat_model.invoke(formated_prompt)
         classify_json = json.loads(classify_response.content)
 
         email_db_record_to_add.append(
@@ -292,11 +313,12 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
                 source="gmail",
                 message_id=raw_gmail.message_id,
                 thread_id=raw_gmail.thread_id,
-                sender=extracted_gmail.sender_email,
+                sender=extracted_gmail.sender,
+                receiver=extracted_gmail.to,
                 subject=extracted_gmail.subject,
                 received_at=extracted_gmail.receive_at,
-                tags=summary_json["tags"],
-                summary=summary_json["summary"],
+                tags=email_summary_json["tags"],
+                summary=email_summary_json["summary"],
                 summary_embedding=summary_embedding,
                 llm_category=classify_json["category"],
                 llm_action=classify_json["action"]
@@ -310,8 +332,8 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
             receive_at=extracted_gmail.receive_at,
             sender=extracted_gmail.sender_email,
             subject=extracted_gmail.subject,
-            summary=summary_json["summary"],
-            tags=summary_json["tags"]
+            summary=email_summary_json["summary"],
+            tags=email_summary_json["tags"]
         )
         if classify_json["category"] == MessageCategory.Essential:
             essential_gmails.append(mail_report_item)
@@ -319,8 +341,8 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
                 "sender_name": extracted_gmail.sender_name,
                 "sender_email": extracted_gmail.sender_email,
                 "subject": extracted_gmail.subject,
-                "summary": summary_json["summary"],
-                "tags": summary_json["tags"],
+                "summary": email_summary_json["summary"],
+                "tags": email_summary_json["tags"],
             })
         else:
             non_essential_gmails.append(mail_report_item)
@@ -332,15 +354,18 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
     # update report
     report_obj = report_model.report_from_dict(report.content)
 
-    ## 1. update report summary using llm
-    chat_model.invoke(update_summary_template.format(
+    ## update report summary using llm
+    formated_prompt = update_summary_template.format(
         rich_text_schema=schema_loader.rich_text_schema,
         example_summary=example_summary,
         current_summary=json.dumps([r.to_dict() for r in report_obj.summary], ensure_ascii=False),
         new_incoming_new_messages=json.dumps(info_for_report_summary_update, ensure_ascii=False)
-    ))
+    )
+    report_summary_response = chat_model.invoke(formated_prompt)
+    report_summary_json = json.loads(report_summary_response.content)
+    report_obj.summary = [rich_text_from_dict(r) for r in report_summary_json]
 
-    ## 2. update report content
+    ## update report content
     if not report_obj.content.content_sources:
         report_obj.content.content_sources = []
     if "gmail" not in report_obj.content.content_sources:
@@ -354,4 +379,13 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
 
     with get_session(write=True) as session:
         session.add_all(email_db_record_to_add)
+        # re-fetch report and update report messages_in_queue as messages_in_queue
+        # will also be updated by webhooks so there may be some concurrency issue
+        # as for summary and content part, as only will consumer update those,
+        # and messages with same report_id will be handled by same consumer as we are
+        # using fifo sqs queue right now, there will be no concurrency issue for those two parts.
+        report = Report.get_by_id(session, report_id, for_update=True)
+        new_report_obj = report_model.report_from_dict(report.content)
+        new_report_obj.messages_in_queue["gmail"] -= len(gmail_list)
+        report_obj.messages_in_queue = new_report_obj.messages_in_queue
         Report.update(session, report_id, content=report_obj.to_dict())

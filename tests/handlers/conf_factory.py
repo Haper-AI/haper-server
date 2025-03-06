@@ -1,11 +1,12 @@
 import pytest
 from pytest_postgresql.janitor import DatabaseJanitor
 from flask import Flask
+from sqlalchemy import text
 
 from biz.service.sqs import init_sqs, get_sqs_client
 from biz.utils.env import RuntimeEnv
 from biz.handler import api_v1
-from biz.service.db import init_db, get_engine
+from biz.service.db import init_db, get_engine, get_session
 from biz.dal.base import Base
 
 
@@ -34,6 +35,10 @@ def new_handler_test_conf(scope, db_name: str, sqs_queue_name: str):
         app.config.update({
             "TESTING": True,
         })
+
+        # add pgvector extension
+        with get_session(write=True) as session:
+            session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
         # create db tables
         Base.metadata.create_all(bind=get_engine())

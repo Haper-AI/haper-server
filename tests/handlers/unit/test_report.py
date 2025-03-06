@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -28,7 +29,8 @@ def new_user_report():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        r = report_model.Report(
+        report_obj = report_model.Report(
+            messages_in_queue={},
             summary=[
                 report_model.RichText(
                     type=rich_text_model.TypeEnum.TEXT,
@@ -83,27 +85,27 @@ def new_user_report():
                 )
             )
         )
-        report = Report.add(session, user.id, r.to_dict())
+        report = Report.add(session, user.id, report_obj.to_dict())
 
         make_transient(user), make_transient(report)
 
     return user, report
 
-class TestGetNewestReportSummary:
+class TestGetNewestReport:
     class TestSuccess:
         def test_success_with_empty_report(self, client, new_user_empty_report):
             user, report = new_user_empty_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.get("/api/v1/report/newest_summary")
+            response = client.get("/api/v1/report/newest")
             assert response.status_code == 200
-            assert response.get_json()['data']['summary'] == []
+            assert response.get_json()['data']['report']
 
         def test_success_with_report(self, client, new_user_report):
             user, report = new_user_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.get("/api/v1/report/newest_summary")
+            response = client.get("/api/v1/report/newest")
             assert response.status_code == 200
-            assert response.get_json()['data']['summary']
+            assert response.get_json()['data']['report']
 
 
 class TestGenerateReport:
@@ -125,3 +127,51 @@ class TestListReportHistory:
         assert response.status_code == 200
         assert response.get_json()['data']['reports']
 
+
+class TestGetReportById:
+    def test_success(self, client, new_user_report):
+        user, report = new_user_report
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        response = client.get("/api/v1/report/{}".format(report.id))
+        assert response.status_code == 200
+        assert response.get_json()['data']['report']
+
+    class TestFail:
+        def test_fail_with_invalid_auth(self, client, new_user_report):
+            user, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
+            response = client.get("/api/v1/report/{}".format(report.id))
+            assert response.status_code == 400
+
+        def test_fail_with_non_exist_report(self, client, new_user):
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
+            response = client.get("/api/v1/report/{}".format(uuid.uuid4()))
+            assert response.status_code == 404
+
+
+class TestDeleteReport:
+    def test_success(self, client, new_user_report):
+        user, report = new_user_report
+        with get_session(write=True) as session:
+            Report.update(session, report.id, status=ReportStatus.Finalized)
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        response = client.delete("/api/v1/report/{}".format(report.id))
+        assert response.status_code == 200
+
+    class TestFail:
+        def test_fail_with_invalid_auth(self, client, new_user_report):
+            user, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
+            response = client.delete("/api/v1/report/{}".format(report.id))
+            assert response.status_code == 400
+
+        def test_fail_with_non_exist_report(self, client, new_user):
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
+            response = client.delete("/api/v1/report/{}".format(uuid.uuid4()))
+            assert response.status_code == 404
+
+        def test_fail_with_invalid_report_status(self, client, new_user_report):
+            user, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.delete("/api/v1/report/{}".format(report.id))
+            assert response.status_code == 400
