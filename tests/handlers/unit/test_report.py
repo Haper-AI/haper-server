@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy.orm import make_transient
 
-from biz.dal.report import Report, ReportStatus
+from biz.dal.report import Report, ReportStatus, MessageCategory
 from biz.dal.user import User
 from biz.handler.middleware import gen_jwt_auth
 from biz.service.db import get_session
@@ -23,6 +23,7 @@ def new_user_empty_report():
         report = Report.add(session, user.id, {})
         make_transient(user), make_transient(report)
     return user, report
+
 
 @pytest.fixture
 def new_user_report():
@@ -47,42 +48,44 @@ def new_user_report():
             ],
             content=report_model.ReportContent(
                 content_sources=["gmail"],
-                gmail=report_model.Gmail(
-                    essential=[
-                        report_model.MailReportItem(
-                            action="read",
-                            message_id="message_id_0",
-                            thread_id="thread_id_0",
-                            receive_at=datetime.now(timezone.utc),
-                            sender=generate_random_gmail(8),
-                            subject="subject",
-                            summary="some summary",
-                            tags=["tag1", "tag2"]
-                        ),
-                        report_model.MailReportItem(
-                            action="reply",
-                            message_id="message_id_1",
-                            thread_id="thread_id_1",
-                            receive_at=datetime.now(timezone.utc),
-                            sender=generate_random_gmail(8),
-                            subject="subject",
-                            summary="some summary",
-                            tags=["tag1", "tag2"]
-                        ),
-                    ],
-                    non_essential=[
-                        report_model.MailReportItem(
-                            action="delete",
-                            message_id="message_id_2",
-                            thread_id="thread_id_2",
-                            receive_at=datetime.now(timezone.utc),
-                            sender=generate_random_gmail(8),
-                            subject="subject",
-                            summary="some summary",
-                            tags=["tag1", "tag2"]
-                        )
-                    ]
-                )
+                gmail=[
+                    report_model.MailReportItem(
+                        _id=0,
+                        action="read",
+                        message_id="message_id_0",
+                        thread_id="thread_id_0",
+                        receive_at=datetime.now(timezone.utc),
+                        sender=generate_random_gmail(8),
+                        subject="subject",
+                        summary="some summary",
+                        category=MessageCategory.Essential.value,
+                        tags=["tag1", "tag2"]
+                    ),
+                    report_model.MailReportItem(
+                        _id=1,
+                        action="reply",
+                        message_id="message_id_1",
+                        thread_id="thread_id_1",
+                        receive_at=datetime.now(timezone.utc),
+                        sender=generate_random_gmail(8),
+                        subject="subject",
+                        summary="some summary",
+                        category=MessageCategory.Essential.value,
+                        tags=["tag1", "tag2"]
+                    ),
+                    report_model.MailReportItem(
+                        _id=2,
+                        action="delete",
+                        message_id="message_id_2",
+                        thread_id="thread_id_2",
+                        receive_at=datetime.now(timezone.utc),
+                        sender=generate_random_gmail(8),
+                        subject="subject",
+                        summary="some summary",
+                        category=MessageCategory.NonEssential.value,
+                        tags=["tag1", "tag2"]
+                    )
+                ]
             )
         )
         report = Report.add(session, user.id, report_obj.to_dict())
@@ -90,6 +93,7 @@ def new_user_report():
         make_transient(user), make_transient(report)
 
     return user, report
+
 
 class TestGetNewestReport:
     class TestSuccess:

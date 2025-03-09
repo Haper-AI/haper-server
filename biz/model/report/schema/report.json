@@ -1,120 +1,108 @@
 {
-    "$schema": "http://json-schema.org/draft-06/schema#",
-    "$ref": "#/definitions/Report",
-    "definitions": {
-        "Report": {
-            "type": "object",
-            "additionalProperties": true,
-            "properties": {
-                "messages_in_queue": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer"
-                    }
-                },
-                "summary": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "./rich_text.json#/definitions/RichText"
-                    }
-                },
-                "content": {
-                    "$ref": "#/definitions/ReportContent"
-                }
-            },
-            "required": [
-                "messages_in_queue",
-                "content",
-                "summary"
-            ],
-            "title": "Report"
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "$ref": "#/definitions/Report",
+  "definitions": {
+    "Report": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "messages_in_queue": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
         },
-        "ReportContent": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "content_sources": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "gmail": {
-                    "$ref": "#/definitions/Gmail"
-                }
-            },
-            "required": [
-                "content_sources"
-            ],
-            "title": "ReportContent"
+        "summary": {
+          "type": "array",
+          "items": {
+            "$ref": "./rich_text.json#/definitions/RichText"
+          }
         },
-        "Gmail": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "essential": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/MailReportItem"
-                    }
-                },
-                "non_essential": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/MailReportItem"
-                    }
-                }
-            },
-            "required": [
-                "essential",
-                "non_essential"
-            ],
-            "title": "Gmail"
-        },
-        "MailReportItem": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "message_id": {
-                    "type": "string"
-                },
-                "thread_id": {
-                    "type": "string"
-                },
-                "receive_at": {
-                    "type": "string",
-                    "format": "date-time"
-                },
-                "sender": {
-                    "type": "string"
-                },
-                "subject": {
-                    "type": "string"
-                },
-                "summary": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "action": {
-                    "type": "string"
-                }
-            },
-            "required": [
-                "action",
-                "message_id",
-                "receive_at",
-                "sender",
-                "subject",
-                "summary",
-                "tags",
-                "thread_id"
-            ],
-            "title": "MailReportItem"
+        "content": {
+          "$ref": "#/definitions/ReportContent"
         }
+      },
+      "required": [
+        "messages_in_queue",
+        "content",
+        "summary"
+      ],
+      "title": "Report"
+    },
+    "ReportContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "content_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gmail": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MailReportItem"
+          }
+        }
+      },
+      "required": [
+        "content_sources"
+      ],
+      "title": "ReportContent"
+    },
+    "MailReportItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "_id": {
+          "type": "integer"
+        },
+        "message_id": {
+          "type": "string"
+        },
+        "thread_id": {
+          "type": "string"
+        },
+        "receive_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sender": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "action": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "_id",
+        "action",
+        "message_id",
+        "receive_at",
+        "sender",
+        "subject",
+        "summary",
+        "category",
+        "tags",
+        "thread_id"
+      ],
+      "title": "MailReportItem"
     }
+  }
 }

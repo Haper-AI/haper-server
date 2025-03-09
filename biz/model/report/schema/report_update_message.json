@@ -1,119 +1,119 @@
 {
-    "$schema": "http://json-schema.org/draft-06/schema#",
-    "$ref": "#/definitions/ReportUpdateMessage",
-    "definitions": {
-        "ReportUpdateMessage": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "user_info": {
-                    "$ref": "#/definitions/UserInfo"
-                },
-                "report_info": {
-                    "$ref": "#/definitions/ReportInfo"
-                },
-                "messages": {
-                    "$ref": "#/definitions/Messages"
-                }
-            },
-            "required": [
-                "messages",
-                "report_info",
-                "user_info"
-            ],
-            "title": "ReportUpdateMessage"
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "$ref": "#/definitions/ReportUpdateMessage",
+  "definitions": {
+    "ReportUpdateMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "user_info": {
+          "$ref": "#/definitions/UserInfo"
         },
-        "Messages": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "gmail": {
-                    "$ref": "#/definitions/Gmail"
-                }
-            },
-            "required": [
-            ],
-            "title": "Messages"
+        "report_info": {
+          "$ref": "#/definitions/ReportInfo"
         },
-        "Gmail": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "account_info": {
-                    "$ref": "#/definitions/AccountInfo"
-                },
-                "new_messages": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/GmailNewMessage"
-                    }
-                }
-            },
-            "required": [
-                "account_info",
-                "new_messages"
-            ],
-            "title": "Gmail"
-        },
-        "AccountInfo": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "provider": {
-                    "type": "string"
-                },
-                "provider_account_id": {
-                    "type": "string"
-                }
-            },
-            "required": [
-                "provider",
-                "provider_account_id"
-            ],
-            "title": "AccountInfo"
-        },
-        "GmailNewMessage": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "message_id": {
-                    "type": "string"
-                },
-                "thread_id": {
-                    "type": "string"
-                }
-            },
-            "required": [
-                "message_id",
-                "thread_id"
-            ],
-            "title": "GmailNewMessage"
-        },
-        "UserInfo": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "user_id": {
-                    "type": "string"
-                }
-            },
-            "required": [
-                "user_id"
-            ],
-            "title": "UserInfo"
-        },
-        "ReportInfo": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "report_id": {
-                    "type": "string"
-                }
-            },
-            "required": [
-                "report_id"
-            ],
-            "title": "ReportInfo"
+        "messages": {
+          "$ref": "#/definitions/Messages"
         }
+      },
+      "required": [
+        "messages",
+        "report_info",
+        "user_info"
+      ],
+      "title": "ReportUpdateMessage"
+    },
+    "Messages": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gmail": {
+          "$ref": "#/definitions/Gmail"
+        }
+      },
+      "required": [
+      ],
+      "title": "Messages"
+    },
+    "Gmail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "account_info": {
+          "$ref": "#/definitions/AccountInfo"
+        },
+        "new_messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GmailNewMessage"
+          }
+        }
+      },
+      "required": [
+        "account_info",
+        "new_messages"
+      ],
+      "title": "Gmail"
+    },
+    "AccountInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "provider_account_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "provider_account_id"
+      ],
+      "title": "AccountInfo"
+    },
+    "GmailNewMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "type": "string"
+        },
+        "thread_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id",
+        "thread_id"
+      ],
+      "title": "GmailNewMessage"
+    },
+    "UserInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "user_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "user_id"
+      ],
+      "title": "UserInfo"
+    },
+    "ReportInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_id"
+      ],
+      "title": "ReportInfo"
     }
+  }
 }

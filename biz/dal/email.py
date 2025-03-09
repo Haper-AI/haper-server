@@ -31,7 +31,7 @@ class Email(Base):
         {'comment': 'Stores metadata and content of emails fetched from OAuth providers'}
     )
 
-    email_id = Column(
+    id = Column(
         BigInteger,
         primary_key=True,
         autoincrement=True,

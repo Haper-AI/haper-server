@@ -252,9 +252,10 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
     fixed_actions = json.dumps([MessageAction.Read, MessageAction.Delete, MessageAction.Reply])
     user_key_tags = json.dumps(user_key_tags)
 
-    email_db_record_to_add: List[Email] = []
-    essential_gmails: List[report_model.MailReportItem] = []
-    non_essential_gmails: List[report_model.MailReportItem] = []
+    # the email records that need to insert into the db
+    email_db_records: List[Email] = []
+
+    mail_report_item_list: List[report_model.MailReportItem] = []
     info_for_report_summary_update: List[dict] = []
     for raw_gmail in gmail_list:
         extracted_gmail = extract_gmail_info(raw_gmail.raw_email)
@@ -307,7 +308,7 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
         classify_response = chat_model.invoke(formated_prompt)
         classify_json = json.loads(classify_response.content)
 
-        email_db_record_to_add.append(
+        email_db_records.append(
             Email(
                 user_id=user_id,
                 source="gmail",
@@ -326,6 +327,7 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
         )
 
         mail_report_item = report_model.MailReportItem(
+            _id=0,
             action=classify_json["action"],
             message_id=raw_gmail.message_id,
             thread_id=raw_gmail.thread_id,
@@ -333,10 +335,11 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
             sender=extracted_gmail.sender_email,
             subject=extracted_gmail.subject,
             summary=email_summary_json["summary"],
+            category=classify_json["category"],
             tags=email_summary_json["tags"]
         )
+        mail_report_item_list.append(mail_report_item)
         if classify_json["category"] == MessageCategory.Essential:
-            essential_gmails.append(mail_report_item)
             info_for_report_summary_update.append({
                 "sender_name": extracted_gmail.sender_name,
                 "sender_email": extracted_gmail.sender_email,
@@ -344,8 +347,6 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
                 "summary": email_summary_json["summary"],
                 "tags": email_summary_json["tags"],
             })
-        else:
-            non_essential_gmails.append(mail_report_item)
 
     with get_session(write=False) as session:
         # get report
@@ -366,19 +367,23 @@ def update_report_with_gmail_message(user_id: str, report_id: str, gmail_list: L
     report_obj.summary = [rich_text_from_dict(r) for r in report_summary_json]
 
     ## update report content
-    if not report_obj.content.content_sources:
+    if report_obj.content.content_sources is None:
         report_obj.content.content_sources = []
     if "gmail" not in report_obj.content.content_sources:
         report_obj.content.content_sources.append("gmail")
 
-    if not report_obj.content.gmail:
-        report_obj.content.gmail = report_model.Gmail(essential=[], non_essential=[])
-
-    report_obj.content.gmail.essential.extend(essential_gmails)
-    report_obj.content.gmail.non_essential.extend(non_essential_gmails)
+    if report_obj.content.gmail is None:
+        report_obj.content.gmail = []
 
     with get_session(write=True) as session:
-        session.add_all(email_db_record_to_add)
+        session.add_all(email_db_records)
+        session.flush()
+
+        for email_record, mail_report_item in zip(email_db_records, mail_report_item_list):
+            mail_report_item._id = email_record.id
+
+        report_obj.content.gmail.extend(mail_report_item_list)
+
         # re-fetch report and update report messages_in_queue as messages_in_queue
         # will also be updated by webhooks so there may be some concurrency issue
         # as for summary and content part, as only will consumer update those,
