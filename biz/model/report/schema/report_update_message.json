@@ -59,16 +59,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "provider": {
-          "type": "string"
-        },
-        "provider_account_id": {
+        "account_id": {
           "type": "string"
         }
       },
       "required": [
-        "provider",
-        "provider_account_id"
+        "account_id"
       ],
       "title": "AccountInfo"
     },

@@ -234,7 +234,9 @@ def test_handle_report_update_message():
         user = User.add(session, generate_random_string(5), email)
         account = Account.add(session, user.id, "google", generate_random_string(16),
                               "access_token", "refresh_token",
-                              expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()))
+                              expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+                              email=email
+                              )
         report = Report.add(session, user.id, report_obj.to_dict())
         emails = [
             Email(
@@ -277,8 +279,7 @@ def test_handle_report_update_message():
         messages=rum_model.Messages(
             gmail=rum_model.Gmail(
                 account_info=rum_model.AccountInfo(
-                    provider=account.provider,
-                    provider_account_id=account.provider_account_id,
+                    account_id=account.id
                 ),
                 new_messages=[
                     rum_model.GmailNewMessage(

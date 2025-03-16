@@ -56,22 +56,25 @@ def sync_user_gmail_message(email: str, history_id: int):
             if latest_report is None:  # if there is no ongoing report sequence
                 logger.warning("no ongoing report sequence for user %s", str(account.user_id))
                 return
-            if latest_report.content:
-                report_obj = report_model.report_from_dict(latest_report.content)
-            else:
-                report_obj = report_model.Report(
-                    messages_in_queue={},
+            if not latest_report.content:
+                Report.update(session, latest_report.id, content=report_model.Report(
+                    messages_in_queue={
+                        "gmail": 0
+                    },
                     summary=[],
                     content=report_model.ReportContent(
                         content_sources=[],
                         gmail=None,
                     ),
-                )
-
-            if "gmail" not in report_obj.messages_in_queue:
-                report_obj.messages_in_queue["gmail"] = len(new_gmail_message)
+                ).to_dict())
+                messages_in_queue = {}
             else:
-                report_obj.messages_in_queue["gmail"] += len(new_gmail_message)
+                messages_in_queue = latest_report.content["messages_in_queue"]
+
+            if "gmail" not in messages_in_queue:
+                messages_in_queue["gmail"] = len(new_gmail_message)
+            else:
+                messages_in_queue["gmail"] += len(new_gmail_message)
 
             # send the new messages to sqs for the report consumer
             sqs_message = rum_model.ReportUpdateMessage(
@@ -82,8 +85,7 @@ def sync_user_gmail_message(email: str, history_id: int):
                 messages=rum_model.Messages(
                     gmail=rum_model.Gmail(
                         account_info=rum_model.AccountInfo(
-                            provider=account.provider,
-                            provider_account_id=account.provider_account_id,
+                            account_id=str(account.id),
                         ),
                         new_messages=new_gmail_message,
                     ),
@@ -92,7 +94,7 @@ def sync_user_gmail_message(email: str, history_id: int):
             send_report_update_message(json.dumps(sqs_message.to_dict()), str(latest_report.id))
 
             # update report content
-            Report.update(session, latest_report.id, content=report_obj.to_dict())
+            Report.update_content_subfield(session, latest_report.id, "messages_in_queue", messages_in_queue)
 
     # update the access_token if necessary
     if credential.token != account.access_token:

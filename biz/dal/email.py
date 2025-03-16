@@ -1,5 +1,5 @@
 from enum import Enum as PyEnum
-from typing import List, Union
+from typing import List, Union, Optional
 
 from sqlalchemy import (
     Column,
@@ -107,6 +107,10 @@ class Email(Base):
         String(16),
         comment='Modified action taken by the user on the email'
     )
+    reply_message = Column(
+        Text,
+        comment='Reply message of the email'
+    )
     created_at = Column(
         TIMESTAMP(timezone=True),
         server_default=func.now(),
@@ -120,22 +124,47 @@ class Email(Base):
     )
 
     @classmethod
+    def get_by_id(cls, session: Session, email_id: int):
+        return session.query(cls).filter_by(id=email_id).first()
+
+    @classmethod
     def list_by_similarity(cls, session: Session, user_id: Union[str, UUID], summary_embedding: List[float],
-                           cosine_distance_boundary: float, limit: int):
+                           cosine_distance_boundary: float = 0.2,
+                           limit: int = 5,
+                           require_reply_message: bool = False):
         cosine_distance = cls.summary_embedding.cosine_distance(summary_embedding)
+        q = session.query(
+            cls.sender,
+            cls.subject,
+            cls.summary,
+            cls.llm_category,
+            cls.modified_category,
+            cls.llm_action,
+            cls.modified_action,
+        ).filter_by(user_id=user_id)
+        if require_reply_message:
+            q = q.filter(cls.reply_message.isnot(None))
         return (
-            session.query(
-                cls.sender,
-                cls.subject,
-                cls.summary,
-                cls.llm_category,
-                cls.modified_category,
-                cls.llm_action,
-                cls.modified_action,
-            )
-            .filter_by(user_id=user_id)
+            q
             .filter(cosine_distance <= cosine_distance_boundary)
             .order_by(cosine_distance)
             .limit(limit)
             .all()
         )
+
+    @classmethod
+    def update(cls, session: Session, email_id: int, modified_category: Optional[str] = None,
+               modified_action: Optional[str] = None, reply_message: Optional[str] = None, ):
+        updates = {}
+        if modified_category:
+            updates['modified_category'] = modified_category
+        if modified_action:
+            updates['modified_action'] = modified_action
+        if reply_message:
+            updates['reply_message'] = reply_message
+        if updates:
+            session.query(cls).filter_by(id=email_id).update(updates)
+
+    @classmethod
+    def delete(cls, session: Session, email_id: int):
+        session.query(cls).filter_by(id=email_id).delete()

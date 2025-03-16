@@ -1,9 +1,9 @@
 import uuid
 from typing import Dict, Union
 
-from sqlalchemy import Column, Boolean, ForeignKey, TIMESTAMP, String
+from sqlalchemy import Column, Boolean, ForeignKey, TIMESTAMP, String, cast
 
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, array
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from .base import Base
@@ -20,6 +20,7 @@ class MessageAction(str, PyEnum):
     Read = "Read"
     Delete = "Delete"
     Reply = "Reply"
+    Ignore = "Ignore"
 
 
 class ReportStatus(str, PyEnum):
@@ -29,7 +30,7 @@ class ReportStatus(str, PyEnum):
 
 class Report(Base):
     __tablename__ = 'reports'
-    __table_args__ = {'comment': 'Message Report data'}
+    __table_args__ = {'comment': 'Message report'}
 
     id = Column(
         UUID,
@@ -46,12 +47,16 @@ class Report(Base):
     status = Column(
         String(16),
         nullable=False,
-        comment='Status of the report'
+        comment='Status of the report itself'
     )
     content = Column(
         JSONB,
         nullable=False,
         comment='JSONB content of the report, storing structured data'
+    )
+    finalized_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was finalized'
     )
     is_deleted = Column(
         Boolean,
@@ -62,10 +67,6 @@ class Report(Base):
         TIMESTAMP(timezone=True),
         server_default=func.now(),
         comment='Timestamp when the report was created'
-    )
-    finalized_at = Column(
-        TIMESTAMP(timezone=True),
-        comment='Timestamp when the report was finalized'
     )
     updated_at = Column(
         TIMESTAMP(timezone=True),
@@ -98,6 +99,25 @@ class Report(Base):
         session.query(cls).filter_by(id=report_id).update(updates)
 
     @classmethod
+    def update_content_subfield(cls, session: Session, report_id: Union[str, UUID],
+                                content_subfield_key: str, content_subfield_value: dict):
+        session.query(cls).filter_by(id=report_id).update({
+            'content': func.jsonb_set(
+                cls.content,
+                array([content_subfield_key]),
+                cast(content_subfield_value, JSONB)
+            )
+        })
+
+    @classmethod
+    def get_content_subfield(cls, session: Session, report_id: Union[str, UUID], content_subfield_key: str,
+                             for_update=False):
+        q = session.query(cls.content[content_subfield_key]).filter_by(id=report_id)
+        if for_update:
+            q = q.with_for_update()
+        return q.first()[0]
+
+    @classmethod
     def get_by_id(cls, session: Session, report_id: Union[str, UUID], for_update=False):
         q = session.query(cls).filter_by(id=report_id)
         if for_update:
@@ -115,11 +135,21 @@ class Report(Base):
         return q.first()
 
     @classmethod
-    def list_by_user(cls, session: Session, user_id: Union[str, UUID]):
+    def count_by_user(cls, session: Session, user_id: Union[str, UUID]):
+        return (
+            session.query(cls)
+            .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Finalized)
+            .count()
+        )
+
+    @classmethod
+    def list_by_user(cls, session: Session, user_id: Union[str, UUID], page: int, page_size: int):
         return (
             session.query(cls)
             .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Finalized)
             .order_by(cls.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
             .all()
         )
 

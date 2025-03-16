@@ -34,24 +34,20 @@ def from_union(fs, x):
 
 
 class AccountInfo:
-    provider: str
-    provider_account_id: str
+    account_id: str
 
-    def __init__(self, provider: str, provider_account_id: str) -> None:
-        self.provider = provider
-        self.provider_account_id = provider_account_id
+    def __init__(self, account_id: str) -> None:
+        self.account_id = account_id
 
     @staticmethod
     def from_dict(obj: Any) -> 'AccountInfo':
         assert isinstance(obj, dict)
-        provider = from_str(obj.get("provider"))
-        provider_account_id = from_str(obj.get("provider_account_id"))
-        return AccountInfo(provider, provider_account_id)
+        account_id = from_str(obj.get("account_id"))
+        return AccountInfo(account_id)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["provider"] = from_str(self.provider)
-        result["provider_account_id"] = from_str(self.provider_account_id)
+        result["account_id"] = from_str(self.account_id)
         return result
 
 

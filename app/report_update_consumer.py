@@ -4,7 +4,7 @@ from datetime import datetime
 from googleapiclient.errors import HttpError
 
 from biz.controller import report_update as report_update_ctrl
-from biz.controller.report_update import RawGmailInfo
+from biz.controller.gmail_util import RawGmailInfo
 from biz.dal.user import Account
 from biz.model.report.report_update_message import report_update_message_from_dict, ReportUpdateMessage
 from biz.service.db import get_session, init_db
@@ -14,7 +14,6 @@ from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
 
 
-
 def handle_message(report_update_message: ReportUpdateMessage):
     if report_update_message.messages.gmail:  # handle gmail messages
         gmail_account_info = report_update_message.messages.gmail.account_info
@@ -22,11 +21,7 @@ def handle_message(report_update_message: ReportUpdateMessage):
 
         # get user account info from db
         with get_session(False) as session:
-            account = Account.get_by_provider_and_provider_id(
-                session,
-                gmail_account_info.provider,
-                gmail_account_info.provider_account_id
-            )
+            account = Account.get_by_id(session, gmail_account_info.account_id)
 
         # use user account info to call gmail api
         gmail_api_client, _ = build_gmail_client(
@@ -51,6 +46,8 @@ def handle_message(report_update_message: ReportUpdateMessage):
         # use llm process email info
         report_update_ctrl.update_report_with_gmail_message(
             report_update_message.user_info.user_id,
+            str(gmail_account_info.account_id),
+            account.email,
             report_update_message.report_info.report_id,
             emails,
         )

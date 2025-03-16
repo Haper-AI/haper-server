@@ -82,8 +82,9 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
                 status=MessageTrackingStatus.ONGOING,
                 extra_info={'expiration': expiration}
             )
-            tracking_record.status = MessageTrackingStatus.ONGOING
-            tracking_record.updated_at = datetime.now(timezone.utc)
+            # NOTE: because of synchronize_session, the field of the object will also be updated, no need to do follow:
+            # tracking_record.status = MessageTrackingStatus.ONGOING
+            # tracking_record.updated_at = datetime.now(timezone.utc)
 
             if credential.token != account.access_token:
                 Account.update(
@@ -168,8 +169,9 @@ def end_message_tracking(user_id: str, account_id: str):
             raise ResponseCode.InvalidParam.create_error("current message tracking status can not be ended")
 
         MessageTrackingRecord.update(session, user_id, account.id, status=MessageTrackingStatus.STOPPED)
-        tracking_record.status = MessageTrackingStatus.STOPPED
-        tracking_record.updated_at = datetime.now(timezone.utc)
+        # NOTE: because of synchronize_session, the field of the object will also be updated, no need to do follow:
+        # tracking_record.status = MessageTrackingStatus.STOPPED
+        # tracking_record.updated_at = datetime.now(timezone.utc)
 
         # if the ongoing message tracking count goes from 1 to 0, end report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 0:

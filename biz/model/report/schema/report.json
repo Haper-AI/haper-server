@@ -31,7 +31,7 @@
     },
     "ReportContent": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
         "content_sources": {
           "type": "array",
@@ -42,7 +42,7 @@
         "gmail": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/MailReportItem"
+            "$ref": "#/definitions/MailMessagesByAccount"
           }
         }
       },
@@ -51,11 +51,35 @@
       ],
       "title": "ReportContent"
     },
-    "MailReportItem": {
+    "MailMessagesByAccount": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "_id": {
+        "account_id": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MailMessageItem"
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "email",
+        "messages"
+      ],
+      "title": "MailMessagesByAccount"
+    },
+    "MailMessageItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
           "type": "integer"
         },
         "message_id": {
@@ -88,21 +112,31 @@
         },
         "action": {
           "type": "string"
+        },
+        "action_result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reply_message": {
+          "type": "string"
         }
       },
       "required": [
-        "_id",
-        "action",
+        "id",
         "message_id",
+        "thread_id",
         "receive_at",
         "sender",
         "subject",
         "summary",
         "category",
         "tags",
-        "thread_id"
+        "action",
+        "action_result"
       ],
-      "title": "MailReportItem"
+      "title": "MailMessageItem"
     }
   }
 }
