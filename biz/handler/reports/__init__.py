@@ -186,7 +186,7 @@ def report_batch_action_status(report_id: str):
         failed=batch_run.failed_actions,
         logs=batch_run.logs if batch_run.logs else [],
         status=batch_run.status,
-    )), mimetype="text/event-stream")
+    )), content_type="text/event-stream")
 
 
 class GenerateMessageReplyReq(BaseModel):
@@ -200,10 +200,11 @@ class GenerateMessageReplyReq(BaseModel):
 @jwt_auth
 def generate_message_reply(report_id: str):
     req = GenerateMessageReplyReq(**request.get_json())
-    return Response(report_ctrl.generate_message_reply(
+    streaming_reply_gen = report_ctrl.generate_message_reply(
         request.ctx.user_id,
         report_id,
         req.source,
         req.account_id,
         req.id,
-    ), content_type="text/event-stream")
+    )
+    return Response(streaming_reply_gen(), content_type="text/event-stream")

@@ -28,7 +28,7 @@ class Email(Base):
     __tablename__ = 'emails'
     __table_args__ = (
         UniqueConstraint('source', 'message_id', name='unique_email_per_source'),
-        {'comment': 'Stores metadata and content of emails fetched from OAuth providers'}
+        {'comment': 'Stores metadata and embedding of emails for RAG'}
     )
 
     id = Column(
@@ -131,26 +131,39 @@ class Email(Base):
     def list_by_similarity(cls, session: Session, user_id: Union[str, UUID], summary_embedding: List[float],
                            cosine_distance_boundary: float = 0.2,
                            limit: int = 5,
-                           require_reply_message: bool = False):
+                           require_reply_message: bool = False,
+                           exclude_ids: Optional[List[int]]  = None,
+                           ):
         cosine_distance = cls.summary_embedding.cosine_distance(summary_embedding)
-        q = session.query(
-            cls.sender,
-            cls.subject,
-            cls.summary,
-            cls.llm_category,
-            cls.modified_category,
-            cls.llm_action,
-            cls.modified_action,
-        ).filter_by(user_id=user_id)
+        query_fields = [cls.sender, cls.subject, cls.summary, cls.llm_category,
+                        cls.modified_category, cls.llm_action, cls.modified_action]
+        if require_reply_message:
+            query_fields.append(cls.reply_message)
+        q = session.query(*query_fields).filter_by(user_id=user_id)
         if require_reply_message:
             q = q.filter(cls.reply_message.isnot(None))
-        return (
+        if exclude_ids:
+            q = q.filter(cls.id.not_in(exclude_ids))
+        rows = (
             q
             .filter(cosine_distance <= cosine_distance_boundary)
             .order_by(cosine_distance)
             .limit(limit)
             .all()
         )
+        results = []
+        for r in rows:
+            results.append(Email(
+                sender=r[0],
+                subject=r[1],
+                summary=r[2],
+                llm_category=r[3],
+                modified_category=r[4],
+                llm_action=r[5],
+                modified_action=r[6],
+                reply_message=r[7] if require_reply_message else None,
+            ))
+        return results
 
     @classmethod
     def update(cls, session: Session, email_id: int, modified_category: Optional[str] = None,

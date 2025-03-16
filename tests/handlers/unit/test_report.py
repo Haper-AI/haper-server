@@ -1,11 +1,15 @@
+import base64
+import random
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
+from email.utils import formatdate
 from unittest.mock import patch, MagicMock
 
 import pytest
 from sqlalchemy.orm import make_transient
 
+from biz.dal.email import Email
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, BatchActionRunStatus
 from biz.dal.user import User, Account
@@ -654,9 +658,171 @@ class TestPollReportRunStatus:
             assert response.status_code == 400
 
 
+@pytest.fixture(scope="module")
+def patch_gmail_get_message():
+    mock_gmail_client = MagicMock()
+    mock_gmail_client.users().messages().get.return_value.execute = MagicMock(side_effect=[
+        # email data 1
+        {
+            "snippet": "some snippet",
+            "labelIds": [
+                "CATEGORY_PROMOTIONS",
+                "IMPORTANT",
+            ],
+            "payload": {
+                "headers": [
+                    {
+                        "name": "Date",
+                        "value": formatdate(timeval=datetime.now().timestamp(), localtime=True, usegmt=False),
+                    },
+                    {
+                        "name": "Subject",
+                        "value": "some subject",
+                    },
+                    {
+                        "name": "From",
+                        "value": "some one <someone@gmail.com>",
+                    },
+                    {
+                        "name": "To",
+                        "value": "receiver@gmail.com"
+                    }
+                ],
+                "mimeType": "text/plain",
+                "body": {
+                    "size": 20,
+                    "data": base64.urlsafe_b64encode("Some email body data".encode("utf-8")).decode("utf-8")
+                }
+            }
+        }
+    ])
+    mock_gmail_client.users().stop.return_value.execute.return_value = {}
+
+    mock_credential = MagicMock()
+    mock_credential.token = generate_random_string(10)
+    mock_credential.expiry = datetime.now() + timedelta(hours=2)
+    with patch('biz.controller.report.build_gmail_client',
+               return_value=(mock_gmail_client, mock_credential)) as mock_build_gmail_account:
+        yield mock_build_gmail_account
+
+
+@pytest.fixture(scope="module")
+def patch_langchain_chat_model():
+    mock_chat_model = MagicMock()
+
+    def chat_model_streaming(*args):
+        for i in range(10):
+            yield "message-{}".format(i)
+            time.sleep(0.4)
+
+    mock_chat_model.stream.side_effect = chat_model_streaming
+
+    with patch('biz.controller.report.init_chat_model', return_value=mock_chat_model) as mock_init_chat_model:
+        yield mock_init_chat_model
+
+embeddings = [random.uniform(-1, 1) for _ in range(768)]
+
 class TestGenerateMessageReply:
+    @pytest.mark.usefixtures("patch_gmail_get_message")
+    @pytest.mark.usefixtures("patch_langchain_chat_model")
     def test_success(self, client, new_user_report):
-        pass
+        user, account, report = new_user_report
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        with get_session(write=True) as session:
+            Report.update(session, report.id, status=ReportStatus.Finalized)
+            session.add_all([
+                Email(
+                    id=0,
+                    user_id=user.id,
+                    source="gmail",
+                    message_id="message-id-1",
+                    thread_id="thread-id-1",
+                    sender="some one <someone@gmail.com>",
+                    receiver="receiver@gmail.com",
+                    subject="some subject",
+                    received_at=datetime.now(timezone.utc),
+                    tags=["tag1", "tag2"],
+                    summary="some summary",
+                    summary_embedding=embeddings,
+                    llm_category=MessageCategory.Essential,
+                    llm_action=MessageAction.Reply,
+                    reply_message="Some reply message 1"
+                ),
+                Email(
+                    id=1,
+                    user_id=user.id,
+                    source="gmail",
+                    message_id="message-id-2",
+                    thread_id="thread-id-2",
+                    sender="some one <someone@gmail.com>",
+                    receiver="receiver@gmail.com",
+                    subject="some subject",
+                    received_at=datetime.now(timezone.utc),
+                    tags=["tag3", "tag4"],
+                    summary="some summary",
+                    summary_embedding=embeddings,
+                    llm_category=MessageCategory.Essential,
+                    llm_action=MessageAction.Reply,
+                    reply_message="Some reply message 2"
+                ),
+            ])
+        response = client.post("/api/v1/report/{}/generate-reply".format(report.id), json={
+            "source": "gmail",
+            "account_id": str(account.id),
+            "id": 1
+        })
+        assert response.status_code == 200
+        assert 'text/event-stream' in response.headers['Content-Type']
+        assert response.data
 
     class TestFail:
-        pass
+        def test_fail_with_invalid_auth(self, client, new_user_report):
+            user, _, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
+            response = client.post("/api/v1/report/{}/generate-reply".format(report.id))
+            assert response.status_code == 400
+
+        def test_fail_with_invalid_report_status(self, client, new_user_report):
+            user, account, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.post("/api/v1/report/{}/generate-reply".format(report.id), json={
+                "source": "gmail",
+                "account_id": str(account.id),
+                "id": 1
+            })
+            assert response.status_code == 400
+
+        def test_fail_with_invalid_batch_action_status(self, client, new_user_report):
+            user, account, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            with get_session(write=True) as session:
+                Report.update(session, report.id, status=ReportStatus.Finalized)
+                ReportBatchAction.add(session, report.id, 3)
+            response = client.post("/api/v1/report/{}/generate-reply".format(report.id), json={
+                "source": "gmail",
+                "account_id": str(account.id),
+                "id": 1
+            })
+            assert response.status_code == 400
+
+        def test_fail_with_no_content(self, client, new_user_empty_report):
+            user, account, report = new_user_empty_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            with get_session(write=True) as session:
+                Report.update(session, report.id, status=ReportStatus.Finalized)
+            response = client.post("/api/v1/report/{}/generate-reply".format(report.id), json={
+                "source": "gmail",
+                "account_id": str(account.id),
+                "id": 1
+            })
+            assert response.status_code == 400
+
+        def test_fail_with_not_reply_action(self, client, new_user_report_with_done_action):
+            user, account, report = new_user_report_with_done_action
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.post("/api/v1/report/{}/batch-action".format(report.id), json={
+                "source": "gmail",
+                "account_id": str(account.id),
+                "id": 0
+            })
+            assert response.status_code == 400

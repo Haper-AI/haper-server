@@ -404,15 +404,22 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
     with get_session(write=False) as session:
         report = Report.get_by_id(session, report_id)
 
+    if not report:
+        raise ResponseCode.InvalidParam.create_error("no report found")
+
     if str(report.user_id) != user_id:
         raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+
+    if report.status == ReportStatus.Appending:
+        raise ResponseCode.UnsupportedAction.create_error(
+            "batch actions cannot be applied as report still receiving messages")
 
     if not report.content or "content" not in report.content or not report.content["content"]:
         raise ResponseCode.UnsupportedAction.create_error("current report has no message content")
 
     # check if there is already a batch action running
     latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-    if latest_batch_action.status == BatchActionRunStatus.Ongoing:
+    if latest_batch_action and latest_batch_action.status == BatchActionRunStatus.Ongoing:
         raise ResponseCode.UnsupportedAction.create_error(
             "current report is executing actions, please wait for the last to complete")
 
@@ -441,11 +448,19 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
 
         # start generate
         ## retrival relevant email with reply_message
+        email_history = None
         with get_session(write=False) as session:
             email = Email.get_by_id(session, id)
-
-            email_history = Email.list_by_similarity(session, user_id, email.summary_embedding,
-                                                     require_reply_message=True)
+            if email:
+                email_history = Email.list_by_similarity(
+                    session,
+                    user_id,
+                    email.summary_embedding,
+                    require_reply_message=True,
+                    exclude_ids=[id]
+                )
+            else:
+                logger.warning("No email found for id {}".format(id))
 
         reply_history = None
         if email_history:
@@ -456,6 +471,8 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
                 "reply_history": e.reply_message,
             }, ensure_ascii=False) for e in email_history]
             reply_history = "\n    ".join([f'  - {e}' for e in history_email_json_list])
+        else:
+            logger.info("No similar email history found")
 
         ## get email body
         with get_session(write=False) as session:
@@ -484,8 +501,16 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
             reply_history=reply_history,
         )
 
-        chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
-        for chunk in chat_model.stream(formated_prompt):
-            yield chunk
+        if credential.token != account.access_token:
+            with get_session(write=True) as session:
+                Account.update(session, account.id, credential.token, expires_at=int(credential.expiry.timestamp()))
+
+        def streaming_reply_gen():
+            chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
+            for chunk in chat_model.stream(formated_prompt):
+                yield chunk
+
+        return streaming_reply_gen
+
     else:
         raise ResponseCode.UnsupportedAction.create_error("unknown source")
