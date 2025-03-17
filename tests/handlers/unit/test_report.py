@@ -546,14 +546,7 @@ class TestUpdateReport:
             assert response.status_code == 400
 
 
-@pytest.fixture(scope="module")
-def patch_thread():
-    with patch('threading.Thread', return_value=MagicMock()) as patch_thread:
-        yield patch_thread
-
-
 class TestReportBatchAction:
-    @pytest.mark.usefixtures("patch_thread")
     def test_success(self, client, new_user_report):
         user, _, report = new_user_report
         with get_session(write=True) as session:

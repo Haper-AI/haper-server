@@ -1,6 +1,4 @@
-import base64
 import json
-import threading
 from datetime import datetime
 from typing import Literal, List, Optional, Dict
 
@@ -14,13 +12,14 @@ from biz.controller.gmail_util import extract_gmail_info
 from biz.dal.email import Email
 from biz.dal.report_batch_action import ReportBatchAction, BatchActionRunStatus, MessageActionResult
 from biz.dal.user import Account
+from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
+from biz.service.sqs import send_report_batch_action_message
 from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
 from biz.utils.response import ResponseCode
 from biz.model.report import report as report_model
-from biz.model.report import action_log as action_log_model
 
 
 def start_new_reporting_sequence(session: Session, user_id: str):
@@ -134,7 +133,7 @@ def update_report_info(user_id: str, report_id: str, update_info: ReportUpdateIn
                 "can not update report as it still processing incoming messages")
 
         latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-        if latest_batch_action and latest_batch_action.status == BatchActionRunStatus.Ongoing:
+        if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
             raise ResponseCode.UnsupportedAction.create_error(
                 "current report is processing batch actions, please wait for it to complete")
 
@@ -199,108 +198,6 @@ def update_report_info(user_id: str, report_id: str, update_info: ReportUpdateIn
         Report.update_content_subfield(session, report_id, "content", report_content_obj.to_dict())
 
 
-def do_batch_action(report_id: str, run_id: str):
-    """
-    the function to apply all available actions in a report, runs in another thread
-    :param report_id:
-    :param run_id:
-    :return:
-    """
-    try:
-        with get_session(write=False) as session:
-            report = Report.get_by_id(session, report_id)
-            report_obj = report_model.report_from_dict(report.content)
-
-        if report_obj.content.gmail:
-            # apply gmail actions
-            for messages_by_account in report_obj.content.gmail:
-                if messages_by_account.messages:
-                    # get account
-                    with get_session(write=False) as session:
-                        account = Account.get_by_id(session, messages_by_account.account_id)
-
-                    gmail_api_client, credential = build_gmail_client(
-                        account.access_token,
-                        account.refresh_token,
-                        datetime.fromtimestamp(account.expires_at)
-                    )
-
-                    for gmail_item in messages_by_account.messages:
-                        try:
-                            if gmail_item.action_result == MessageActionResult.Success:
-                                # skip for already success action
-                                continue
-
-                            if gmail_item.action == MessageAction.Read:
-                                gmail_api_client.users().messages().modify(
-                                    userId='me',
-                                    id=gmail_item.message_id,
-                                    body={
-                                        'removeLabelIds': ['UNREAD'],
-                                    }
-                                ).execute()
-                            elif gmail_item.action == MessageAction.Delete:
-                                gmail_api_client.users().messages().trash(
-                                    userId='me',
-                                    id=gmail_item.message_id,
-                                ).execute()
-                            elif gmail_item.action == MessageAction.Reply:
-                                body_data = base64.urlsafe_b64encode(gmail_item.reply_message.encode("utf-8"))
-                                gmail_api_client.users().messages().send(
-                                    userId='me',
-                                    body={
-                                        "threadId": gmail_item.thread_id,
-                                        "payload": {
-                                            # TODO: support more type of mimeType
-                                            "mimeType": "text/plain",
-                                            "body": {
-                                                "size": len(body_data),
-                                                "data": body_data.decode("utf-8")
-                                            }
-                                        }
-                                    }
-                                ).execute()
-
-                            # if gmail_item.action == MessageAction.Ignore:
-                            # ignore
-
-                            gmail_item.action_result = MessageActionResult.Success
-                            log_to_add = action_log_model.ActionLog(
-                                at=int(datetime.now().timestamp()),
-                                id=gmail_item.id,
-                                message=f"{gmail_item.action} {gmail_item.sender} failed",
-                            ).to_dict()
-
-                        except Exception as e:
-                            logger.error(e)
-                            gmail_item.action_result = MessageActionResult.Error
-                            log_to_add = action_log_model.ActionLog(
-                                at=int(datetime.now().timestamp()),
-                                id=gmail_item.id,
-                                message=f"{gmail_item.action} {gmail_item.sender} failed",
-                            ).to_dict()
-                        finally:
-                            with get_session(write=True) as session:
-                                # insert action log
-                                ReportBatchAction.append_logs(session, run_id, [
-                                    log_to_add,
-                                ])
-                                if gmail_item.action_result == MessageActionResult.Success:
-                                    ReportBatchAction.increase_success_actions(session, report_id)
-                                else:
-                                    ReportBatchAction.increase_failed_actions(session, report_id)
-                                # update content
-                                Report.update_content_subfield(session, report_id, "content",
-                                                               report_obj.content.to_dict())
-
-        # set batch run status
-        with get_session(write=True) as session:
-            ReportBatchAction.update(session, report_id, status=BatchActionRunStatus.Done)
-
-    except Exception as e:
-        logger.error(e)
-
-
 def apply_report_actions(user_id: str, report_id: str):
     with get_session(write=True) as session:
         report = Report.get_by_id(session, report_id)
@@ -316,7 +213,7 @@ def apply_report_actions(user_id: str, report_id: str):
 
         # check if there is already a batch action running
         latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-        if latest_batch_action and latest_batch_action.status == BatchActionRunStatus.Ongoing:
+        if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
             raise ResponseCode.UnsupportedAction.create_error(
                 "current report is still executing actions, please wait for the last to complete")
 
@@ -346,11 +243,15 @@ def apply_report_actions(user_id: str, report_id: str):
         if total_count == 0:
             raise ResponseCode.UnsupportedAction.create_error("no actions needed to run for this report")
 
-        # generate a batch run in another thread
-        # TODO: should use another consumer or just use faas?
         run = ReportBatchAction.add(session, report_id, total_count)
-        t = threading.Thread(target=do_batch_action, args=(report_id, str(run.id)))
-        t.start()
+
+        # send sqs message
+        report_batch_action_message = ReportBatchActionMessage(
+            report_id=str(report_id),
+            run_id=str(run.id)
+        )
+        send_report_batch_action_message(report_batch_action_message, str(report_id))
+
         make_transient(run)
 
     return run.id
@@ -419,7 +320,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
 
     # check if there is already a batch action running
     latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-    if latest_batch_action and latest_batch_action.status == BatchActionRunStatus.Ongoing:
+    if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
         raise ResponseCode.UnsupportedAction.create_error(
             "current report is executing actions, please wait for the last to complete")
 

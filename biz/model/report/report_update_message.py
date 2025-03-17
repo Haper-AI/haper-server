@@ -114,65 +114,29 @@ class Messages:
         return result
 
 
-class ReportInfo:
-    report_id: str
-
-    def __init__(self, report_id: str) -> None:
-        self.report_id = report_id
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'ReportInfo':
-        assert isinstance(obj, dict)
-        report_id = from_str(obj.get("report_id"))
-        return ReportInfo(report_id)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["report_id"] = from_str(self.report_id)
-        return result
-
-
-class UserInfo:
-    user_id: str
-
-    def __init__(self, user_id: str) -> None:
-        self.user_id = user_id
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'UserInfo':
-        assert isinstance(obj, dict)
-        user_id = from_str(obj.get("user_id"))
-        return UserInfo(user_id)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["user_id"] = from_str(self.user_id)
-        return result
-
-
 class ReportUpdateMessage:
     messages: Messages
-    report_info: ReportInfo
-    user_info: UserInfo
+    report_id: str
+    user_id: str
 
-    def __init__(self, messages: Messages, report_info: ReportInfo, user_info: UserInfo) -> None:
+    def __init__(self, messages: Messages, report_id: str, user_id: str) -> None:
         self.messages = messages
-        self.report_info = report_info
-        self.user_info = user_info
+        self.report_id = report_id
+        self.user_id = user_id
 
     @staticmethod
     def from_dict(obj: Any) -> 'ReportUpdateMessage':
         assert isinstance(obj, dict)
         messages = Messages.from_dict(obj.get("messages"))
-        report_info = ReportInfo.from_dict(obj.get("report_info"))
-        user_info = UserInfo.from_dict(obj.get("user_info"))
-        return ReportUpdateMessage(messages, report_info, user_info)
+        report_id = from_str(obj.get("report_id"))
+        user_id = from_str(obj.get("user_id"))
+        return ReportUpdateMessage(messages, report_id, user_id)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["messages"] = to_class(Messages, self.messages)
-        result["report_info"] = to_class(ReportInfo, self.report_info)
-        result["user_info"] = to_class(UserInfo, self.user_info)
+        result["report_id"] = from_str(self.report_id)
+        result["user_id"] = from_str(self.user_id)
         return result
 
 

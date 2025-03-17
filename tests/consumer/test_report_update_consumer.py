@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy.orm import make_transient
 
-from app.report_update_consumer import handle_message
+from app.consumer_main import handle_report_update
 from biz.controller.report_update import example_summary
 from biz.dal.email import Email
 from biz.dal.report import Report, MessageCategory, MessageAction
@@ -210,7 +210,7 @@ def patch_gmail_get_message():
     mock_credential = MagicMock()
     mock_credential.token = generate_random_string(10)
     mock_credential.expiry = datetime.now() + timedelta(hours=2)
-    with patch('app.report_update_consumer.build_gmail_client',
+    with patch('app.consumer_main.build_gmail_client',
                return_value=(mock_gmail_client, mock_credential)) as mock_build_gmail_account:
         yield mock_build_gmail_account
 
@@ -274,8 +274,8 @@ def test_handle_report_update_message():
         make_transient(user), make_transient(account), make_transient(report)
 
     report_update_message = rum_model.ReportUpdateMessage(
-        user_info=rum_model.UserInfo(user_id=str(user.id)),
-        report_info=rum_model.ReportInfo(report_id=str(report.id)),
+        user_id=str(user.id),
+        report_id=str(report.id),
         messages=rum_model.Messages(
             gmail=rum_model.Gmail(
                 account_info=rum_model.AccountInfo(
@@ -299,4 +299,4 @@ def test_handle_report_update_message():
         ),
     )
 
-    handle_message(report_update_message)
+    handle_report_update(report_update_message)

@@ -147,7 +147,7 @@ class BatchActionStatusInfos:
 
 def poll_batch_action_run_status(run_id: str, last_info: BatchActionStatusInfos):
     yield json.dumps(last_info.to_dict())
-    if last_info.status == BatchActionRunStatus.Ongoing:
+    if last_info.status != BatchActionRunStatus.Done:
         try:
             while True:
                 time.sleep(1)

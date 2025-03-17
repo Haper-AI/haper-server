@@ -1,4 +1,5 @@
 {
+  "$id": "report_update_message.json",
   "$schema": "http://json-schema.org/draft-06/schema#",
   "$ref": "#/definitions/ReportUpdateMessage",
   "definitions": {
@@ -6,11 +7,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "user_info": {
-          "$ref": "#/definitions/UserInfo"
+        "user_id": {
+          "type": "string"
         },
-        "report_info": {
-          "$ref": "#/definitions/ReportInfo"
+        "report_id": {
+          "type": "string"
         },
         "messages": {
           "$ref": "#/definitions/Messages"
@@ -18,8 +19,8 @@
       },
       "required": [
         "messages",
-        "report_info",
-        "user_info"
+        "report_id",
+        "user_id"
       ],
       "title": "ReportUpdateMessage"
     },
@@ -84,32 +85,6 @@
         "thread_id"
       ],
       "title": "GmailNewMessage"
-    },
-    "UserInfo": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "user_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "user_id"
-      ],
-      "title": "UserInfo"
-    },
-    "ReportInfo": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "report_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "report_id"
-      ],
-      "title": "ReportInfo"
     }
   }
 }

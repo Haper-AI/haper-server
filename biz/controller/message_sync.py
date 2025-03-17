@@ -77,11 +77,9 @@ def sync_user_gmail_message(email: str, history_id: int):
                 messages_in_queue["gmail"] += len(new_gmail_message)
 
             # send the new messages to sqs for the report consumer
-            sqs_message = rum_model.ReportUpdateMessage(
-                user_info=rum_model.UserInfo(user_id=str(account.user_id)),
-                report_info=rum_model.ReportInfo(
-                    report_id=str(latest_report.id)
-                ),
+            report_update_message = rum_model.ReportUpdateMessage(
+                user_id=str(account.user_id),
+                report_id=str(latest_report.id),
                 messages=rum_model.Messages(
                     gmail=rum_model.Gmail(
                         account_info=rum_model.AccountInfo(
@@ -91,7 +89,7 @@ def sync_user_gmail_message(email: str, history_id: int):
                     ),
                 ),
             )
-            send_report_update_message(json.dumps(sqs_message.to_dict()), str(latest_report.id))
+            send_report_update_message(report_update_message, str(latest_report.id))
 
             # update report content
             Report.update_content_subfield(session, latest_report.id, "messages_in_queue", messages_in_queue)

@@ -1,8 +1,7 @@
 import uuid
 from typing import Union, List
 
-from sqlalchemy import Column, TIMESTAMP, ForeignKey, String, Integer, cast
-from sqlalchemy.dialects.mysql import VARCHAR
+from sqlalchemy import Column, TIMESTAMP, ForeignKey, String, Integer
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -12,6 +11,7 @@ from enum import Enum as PyEnum
 
 
 class BatchActionRunStatus(str, PyEnum):
+    Waiting = "Waiting"
     Ongoing = "Ongoing"
     Done = "Done"
 
@@ -79,7 +79,7 @@ class ReportBatchAction(Base):
     def add(cls, session: Session, report_id: Union[str, UUID], total_actions: int):
         record = cls(
             report_id=report_id,
-            status=BatchActionRunStatus.Ongoing,
+            status=BatchActionRunStatus.Waiting,
             total_actions=total_actions,
         )
         session.add(record)
