@@ -3,6 +3,7 @@ from pytest_postgresql.janitor import DatabaseJanitor
 from flask import Flask
 from sqlalchemy import text
 
+from biz.service.rate_limiter import user_limiter
 from biz.service.sqs import init_sqs, get_sqs_client
 from biz.utils.env import RuntimeEnv
 from biz.handler import api_v1
@@ -32,6 +33,7 @@ def new_handler_test_conf(scope, db_name: str, sqs_queue_name: str):
         app = Flask(RuntimeEnv.Instance().APP_NAME)
         app.register_blueprint(api_v1)
         init_db()
+        user_limiter.init_app(app)
         app.config.update({
             "TESTING": True,
         })

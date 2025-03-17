@@ -1,20 +1,12 @@
-from flask import Flask
+from flask import Flask, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-ip_limiter = None
+ip_limiter = Limiter(key_func=get_remote_address)
 
-def init_ip_limiter(app: Flask):
-    global limiter
-    limiter = Limiter(
-        get_remote_address,
-        app=app,
-    )
 
-user_limiter = None
-def init_user_limiter(app: Flask):
-    global limiter
-    limiter = Limiter(
-        get_remote_address, # TODO: change to user id func
-        app=app,
-    )
+def get_user_id():
+    return request.ctx.user_id
+
+
+user_limiter = Limiter(key_func=get_user_id)

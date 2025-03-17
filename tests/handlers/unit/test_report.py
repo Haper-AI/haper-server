@@ -317,6 +317,40 @@ class TestGenerateReport:
         assert response.status_code == 200
         assert response.get_json()['data']['report']
 
+    class TestFail:
+        def test_fail_with_no_content(self, client, new_user_empty_report):
+            user, _, report = new_user_empty_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.post("/api/v1/report/generate")
+            assert response.status_code == 400
+
+        def test_fail_with_reach_limit(self, client, new_user_report):
+            user, _, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+            # first request
+            response = client.post("/api/v1/report/generate")
+            assert response.status_code == 200
+
+            with get_session(write=True) as session:
+                new_report = Report.get_latest_by_user_id(session, user.id)
+                Report.delete(session, new_report.id)
+                Report.update(session, report.id, status=ReportStatus.Appending)
+
+            # second request
+            response = client.post("/api/v1/report/generate")
+            assert response.status_code == 200
+
+            with get_session(write=True) as session:
+                new_report = Report.get_latest_by_user_id(session, user.id)
+                Report.delete(session, new_report.id)
+                Report.update(session, report.id, status=ReportStatus.Appending)
+
+            # third request
+            response = client.post("/api/v1/report/generate")
+            assert response.status_code == 400
+
+
 
 class TestListReportHistory:
     def test_success(self, client, new_user_report):
@@ -713,7 +747,9 @@ def patch_langchain_chat_model():
     with patch('biz.controller.report.init_chat_model', return_value=mock_chat_model) as mock_init_chat_model:
         yield mock_init_chat_model
 
+
 embeddings = [random.uniform(-1, 1) for _ in range(768)]
+
 
 class TestGenerateMessageReply:
     @pytest.mark.usefixtures("patch_gmail_get_message")

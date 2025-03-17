@@ -8,6 +8,7 @@ from pydantic import BaseModel, PositiveInt
 from biz.controller import report as report_ctrl
 from biz.dal.report_batch_action import BatchActionRunStatus
 from biz.handler.middleware import catch_error, jwt_auth
+from biz.service.rate_limiter import user_limiter
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse
 
@@ -40,6 +41,7 @@ def get_newest_appending_report():
 @report_routes.route("/generate", methods=["POST"])
 @catch_error
 @jwt_auth
+@user_limiter.limit("2 per day")
 def generate_report():
     resp = HTTPResponse(request.method, request.path)
     latest_report, _ = report_ctrl.generate_report(request.ctx.user_id)

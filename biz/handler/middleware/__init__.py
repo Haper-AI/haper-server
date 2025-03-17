@@ -5,6 +5,7 @@ from typing import Optional
 
 import jwt
 from flask import request
+from flask_limiter import RateLimitExceeded
 from pydantic import ValidationError
 from werkzeug.exceptions import UnsupportedMediaType
 
@@ -116,6 +117,9 @@ def catch_error(f):
         except ValidationError as e:
             # Handle pydantic validation errors and return appropriate response
             resp.set_error(ResponseCode.InvalidParam.create_error(validation_error_to_str(e)))
+            return resp.return_with_log()
+        except RateLimitExceeded:
+            resp.set_error(ResponseCode.UnsupportedAction.create_error("too many requests"))
             return resp.return_with_log()
         except Exception as e:
             # TODO: catch other type of Exception like from db, s3, mq, etc.
