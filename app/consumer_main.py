@@ -61,100 +61,96 @@ def handle_report_update(the_message: ReportUpdateMessage):
         )
 
 def handle_report_batch_action(the_message: ReportBatchActionMessage):
-    try:
-        with get_session(write=True) as session:
-            report = Report.get_by_id(session, the_message.report_id)
-            report_obj = report_model.report_from_dict(report.content)
-            ReportBatchAction.update(session, the_message.run_id, BatchActionRunStatus.Ongoing)
+    with get_session(write=True) as session:
+        report = Report.get_by_id(session, the_message.report_id)
+        report_obj = report_model.report_from_dict(report.content)
+        ReportBatchAction.update(session, the_message.run_id, BatchActionRunStatus.Ongoing)
 
-        if report_obj.content.gmail:
-            # apply gmail actions
-            for messages_by_account in report_obj.content.gmail:
-                if messages_by_account.messages:
-                    # get account
-                    with get_session(write=False) as session:
-                        account = Account.get_by_id(session, messages_by_account.account_id)
+    if report_obj.content.gmail:
+        # apply gmail actions
+        for messages_by_account in report_obj.content.gmail:
+            if messages_by_account.messages:
+                # get account
+                with get_session(write=False) as session:
+                    account = Account.get_by_id(session, messages_by_account.account_id)
 
-                    gmail_api_client, credential = build_gmail_client(
-                        account.access_token,
-                        account.refresh_token,
-                        datetime.fromtimestamp(account.expires_at)
-                    )
+                gmail_api_client, credential = build_gmail_client(
+                    account.access_token,
+                    account.refresh_token,
+                    datetime.fromtimestamp(account.expires_at)
+                )
 
-                    for gmail_item in messages_by_account.messages:
-                        try:
-                            if gmail_item.action_result == MessageActionResult.Success:
-                                # skip for already success action
-                                continue
+                for gmail_item in messages_by_account.messages:
+                    try:
+                        if gmail_item.action_result == MessageActionResult.Success:
+                            # skip for already success action
+                            continue
 
-                            if gmail_item.action == MessageAction.Read:
-                                gmail_api_client.users().messages().modify(
-                                    userId='me',
-                                    id=gmail_item.message_id,
-                                    body={
-                                        'removeLabelIds': ['UNREAD'],
-                                    }
-                                ).execute()
-                            elif gmail_item.action == MessageAction.Delete:
-                                gmail_api_client.users().messages().trash(
-                                    userId='me',
-                                    id=gmail_item.message_id,
-                                ).execute()
-                            elif gmail_item.action == MessageAction.Reply:
-                                body_data = base64.urlsafe_b64encode(gmail_item.reply_message.encode("utf-8"))
-                                gmail_api_client.users().messages().send(
-                                    userId='me',
-                                    body={
-                                        "threadId": gmail_item.thread_id,
-                                        "payload": {
-                                            # TODO: support more type of mimeType
-                                            "mimeType": "text/plain",
-                                            "body": {
-                                                "size": len(body_data),
-                                                "data": body_data.decode("utf-8")
-                                            }
+                        if gmail_item.action == MessageAction.Read:
+                            gmail_api_client.users().messages().modify(
+                                userId='me',
+                                id=gmail_item.message_id,
+                                body={
+                                    'removeLabelIds': ['UNREAD'],
+                                }
+                            ).execute()
+                        elif gmail_item.action == MessageAction.Delete:
+                            gmail_api_client.users().messages().trash(
+                                userId='me',
+                                id=gmail_item.message_id,
+                            ).execute()
+                        elif gmail_item.action == MessageAction.Reply:
+                            body_data = base64.urlsafe_b64encode(gmail_item.reply_message.encode("utf-8"))
+                            gmail_api_client.users().messages().send(
+                                userId='me',
+                                body={
+                                    "threadId": gmail_item.thread_id,
+                                    "payload": {
+                                        # TODO: support more type of mimeType
+                                        "mimeType": "text/plain",
+                                        "body": {
+                                            "size": len(body_data),
+                                            "data": body_data.decode("utf-8")
                                         }
                                     }
-                                ).execute()
+                                }
+                            ).execute()
 
-                            # if gmail_item.action == MessageAction.Ignore:
-                            # ignore
+                        # if gmail_item.action == MessageAction.Ignore:
+                        # ignore
 
-                            gmail_item.action_result = MessageActionResult.Success
-                            log_to_add = action_log_model.ActionLog(
-                                at=int(datetime.now().timestamp()),
-                                id=gmail_item.id,
-                                message=f"{gmail_item.action} {gmail_item.sender} failed",
-                            ).to_dict()
+                        gmail_item.action_result = MessageActionResult.Success
+                        log_to_add = action_log_model.ActionLog(
+                            at=int(datetime.now().timestamp()),
+                            id=gmail_item.id,
+                            message=f"{gmail_item.action} {gmail_item.sender} failed",
+                        ).to_dict()
 
-                        except Exception as e:
-                            logger.error(e)
-                            gmail_item.action_result = MessageActionResult.Error
-                            log_to_add = action_log_model.ActionLog(
-                                at=int(datetime.now().timestamp()),
-                                id=gmail_item.id,
-                                message=f"{gmail_item.action} {gmail_item.sender} failed",
-                            ).to_dict()
-                        finally:
-                            with get_session(write=True) as session:
-                                # insert action log
-                                ReportBatchAction.append_logs(session, the_message.run_id, [
-                                    log_to_add,
-                                ])
-                                if gmail_item.action_result == MessageActionResult.Success:
-                                    ReportBatchAction.increase_success_actions(session, the_message.report_id)
-                                else:
-                                    ReportBatchAction.increase_failed_actions(session, the_message.report_id)
-                                # update content
-                                Report.update_content_subfield(session, the_message.report_id, "content",
-                                                               report_obj.content.to_dict())
+                    except Exception as e:
+                        logger.error(e)
+                        gmail_item.action_result = MessageActionResult.Error
+                        log_to_add = action_log_model.ActionLog(
+                            at=int(datetime.now().timestamp()),
+                            id=gmail_item.id,
+                            message=f"{gmail_item.action} {gmail_item.sender} failed",
+                        ).to_dict()
+                    finally:
+                        with get_session(write=True) as session:
+                            # insert action log
+                            ReportBatchAction.append_logs(session, the_message.run_id, [
+                                log_to_add,
+                            ])
+                            if gmail_item.action_result == MessageActionResult.Success:
+                                ReportBatchAction.increase_success_actions(session, the_message.report_id)
+                            else:
+                                ReportBatchAction.increase_failed_actions(session, the_message.report_id)
+                            # update content
+                            Report.update_content_subfield(session, the_message.report_id, "content",
+                                                           report_obj.content.to_dict())
 
-        # set batch run status
-        with get_session(write=True) as session:
-            ReportBatchAction.update(session, the_message.report_id, status=BatchActionRunStatus.Done)
-
-    except Exception as e:
-        logger.error(e)
+    # set batch run status
+    with get_session(write=True) as session:
+        ReportBatchAction.update(session, the_message.report_id, status=BatchActionRunStatus.Done)
 
 
 def init():

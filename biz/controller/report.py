@@ -119,30 +119,42 @@ class ReportUpdateInfo(BaseModel):
         return self
 
 
+def check_can_op_on_report_and_parse_content(session: Session, user_id: str, report: Report):
+    if not report:
+        raise ResponseCode.InvalidParam.create_error("no report found")
+
+    if str(report.user_id) != user_id:
+        raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+
+    if report.status == ReportStatus.Appending:
+        raise ResponseCode.UnsupportedAction.create_error(
+            "can not update report as it still processing incoming messages")
+
+    latest_batch_action = ReportBatchAction.get_latest(session, report.id)
+    if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
+        raise ResponseCode.UnsupportedAction.create_error(
+            "current report is processing batch actions, please wait for it to complete")
+
+    if not report.content:
+        raise ResponseCode.UnsupportedAction.create_error(
+            "current report has not content, please wait for new messages")
+
+    if "messages_in_queue" in report.content and report.content["messages_in_queue"]:
+        for k, v in report.content["messages_in_queue"].items():
+            if v > 0:
+                raise ResponseCode.UnsupportedAction.create_error(
+                    "current report still has messages in queue to process, please wait for it to complete"
+                )
+
+    report_content_obj = report_model.ReportContent.from_dict(report.content["content"])
+    return report_content_obj
+
+
 def update_report_info(user_id: str, report_id: str, update_info: ReportUpdateInfo):
     with get_session(write=True) as session:
         report = Report.get_by_id(session, report_id, for_update=True)
-        if not report:
-            raise ResponseCode.InvalidParam.create_error("no report found")
 
-        if str(report.user_id) != user_id:
-            raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
-
-        if report.status == ReportStatus.Appending:
-            raise ResponseCode.UnsupportedAction.create_error(
-                "can not update report as it still processing incoming messages")
-
-        latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-        if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
-            raise ResponseCode.UnsupportedAction.create_error(
-                "current report is processing batch actions, please wait for it to complete")
-
-        if not report.content:
-            raise ResponseCode.UnsupportedAction.create_error(
-                "current report has not content, please wait for new messages")
-
-        report_content_obj = report_model.ReportContent.from_dict(report.content["content"])
-
+        report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
         # update gmail
         ## map update_info by account_id, then by id
         mapped_update_info: Dict[str, Dict[int, ReportUpdateInfo.InfoUpdates]] = {}
@@ -200,38 +212,12 @@ def update_report_info(user_id: str, report_id: str, update_info: ReportUpdateIn
 
 def apply_report_actions(user_id: str, report_id: str):
     with get_session(write=True) as session:
-        report = Report.get_by_id(session, report_id)
-        if not report:
-            raise ResponseCode.InvalidParam.create_error("no report found")
+        report = Report.get_by_id(session, report_id, for_update=True)
 
-        if str(report.user_id) != user_id:
-            raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
-
-        if report.status == ReportStatus.Appending:
-            raise ResponseCode.UnsupportedAction.create_error(
-                "batch actions cannot be applied as report still receiving messages")
-
-        # check if there is already a batch action running
-        latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-        if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
-            raise ResponseCode.UnsupportedAction.create_error(
-                "current report is still executing actions, please wait for the last to complete")
-
-        if not report.content:
-            raise ResponseCode.UnsupportedAction.create_error(
-                "current report has not content, please wait for new messages")
-
-        # check if still has messages to be processed for this report
-        report_obj = report_model.report_from_dict(report.content)
-        for k, v in report_obj.messages_in_queue.items():
-            if v > 0:
-                raise ResponseCode.UnsupportedAction.create_error(
-                    "current report still has messages in queue to process, please wait for it to complete"
-                )
-
+        report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
         # get total actions to run
         total_count = 0
-        for messages_by_account in report_obj.content.gmail:
+        for messages_by_account in report_content_obj.gmail:
             for gmail_item in messages_by_account.messages:
                 if gmail_item.action_result != MessageActionResult.Success:
                     if gmail_item.action == MessageAction.Reply and not gmail_item.reply_message:
@@ -305,29 +291,10 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
     with get_session(write=False) as session:
         report = Report.get_by_id(session, report_id)
 
-    if not report:
-        raise ResponseCode.InvalidParam.create_error("no report found")
-
-    if str(report.user_id) != user_id:
-        raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
-
-    if report.status == ReportStatus.Appending:
-        raise ResponseCode.UnsupportedAction.create_error(
-            "batch actions cannot be applied as report still receiving messages")
-
-    if not report.content or "content" not in report.content or not report.content["content"]:
-        raise ResponseCode.UnsupportedAction.create_error("current report has no message content")
-
-    # check if there is already a batch action running
-    latest_batch_action = ReportBatchAction.get_latest(session, report_id)
-    if latest_batch_action and latest_batch_action.status != BatchActionRunStatus.Done:
-        raise ResponseCode.UnsupportedAction.create_error(
-            "current report is executing actions, please wait for the last to complete")
-
-    report_content = report_model.ReportContent.from_dict(report.content["content"])
+    report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
     if source == "gmail":
         corresponding_gmail_item = None
-        for messages_by_account in report_content.gmail:
+        for messages_by_account in report_content_obj.gmail:
             if corresponding_gmail_item:
                 break
             if messages_by_account.account_id == account_id:

@@ -104,7 +104,7 @@ class ReportBatchAction(Base):
     @classmethod
     def increase_success_actions(cls, session: Session, run_id: Union[str, UUID]):
         session.query(cls).filter_by(id=run_id).update({
-            'success_actions': cls.succeed_actions + 1
+            'succeed_actions': cls.succeed_actions + 1
         })
 
     @classmethod

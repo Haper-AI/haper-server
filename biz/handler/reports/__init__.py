@@ -200,6 +200,7 @@ class GenerateMessageReplyReq(BaseModel):
 @report_routes.route("/<uuid:report_id>/generate-reply", methods=["POST"])
 @catch_error
 @jwt_auth
+@user_limiter.limit("1 per 2 second")
 def generate_message_reply(report_id: str):
     req = GenerateMessageReplyReq(**request.get_json())
     streaming_reply_gen = report_ctrl.generate_message_reply(

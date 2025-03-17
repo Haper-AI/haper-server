@@ -138,7 +138,7 @@ Based on the Current Summary info and New Incoming New Messages info, update and
 Guidelines:
   1. Summary is an array of RichText, and those RichText can be combined into a readable sentences. 
 
-  2. Here is the json schema definition of RichText:
+  2. Should Strictly follow the json schema of RichText, here is the json schema definition:
   {rich_text_schema}
 
   3. Here is an example of summary:
@@ -151,7 +151,8 @@ Guidelines:
     - summary
     - tags
   
-  5. You must output the result as a list of RichText json objects.
+  5. You must output the result as a list of RichText json objects. 
+  And in order to kep summary concise, try to combine some RichText if possible.
 
 
 Current Summary:
