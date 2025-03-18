@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from typing import List
 
+from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
 from biz.dal.report import Report
 from biz.dal.user import Account
 from biz.service.db import get_session
@@ -21,6 +22,11 @@ def sync_user_gmail_message(email: str, history_id: int):
             logger.warning("email is not connected to a registered account")
             return
 
+        tracking_status = MessageTrackingRecord.get_by_user_id_and_account_id(session, account.user_id, account.id)
+        if tracking_status is None or tracking_status.status != MessageTrackingStatus.ONGOING:
+            logger.warning("message for this account is not in synchronizing right now")
+            return
+
     # get messages added
     gmail_api_client, credential = build_gmail_client(
         account.access_token,
@@ -28,6 +34,7 @@ def sync_user_gmail_message(email: str, history_id: int):
         datetime.fromtimestamp(account.expires_at)
     )
 
+    pre_history_id = tracking_status.extra_info["pre_history_id"]
     has_next_page = True
     page_token = None
     new_gmail_message: List[rum_model.GmailNewMessage] = []
@@ -35,7 +42,7 @@ def sync_user_gmail_message(email: str, history_id: int):
     while has_next_page:
         response = gmail_api_client.users().history().list(
             userId="me",
-            startHistoryId=history_id,
+            startHistoryId=pre_history_id,
             pageToken=page_token
         ).execute()
 
@@ -50,8 +57,13 @@ def sync_user_gmail_message(email: str, history_id: int):
         if not page_token:
             has_next_page = False
 
-    if new_gmail_message:
-        with get_session(write=True) as session:
+    with get_session(write=True) as session:
+        # update extra_info
+        new_extra_info = tracking_status.extra_info
+        new_extra_info["pre_history_id"] = history_id
+        MessageTrackingRecord.update(session, tracking_status.user_id, tracking_status.account_id,
+                                     extra_info=new_extra_info)
+        if new_gmail_message:
             latest_report = Report.get_latest_by_user_id(session, account.user_id, for_update=True)
             if latest_report is None:  # if there is no ongoing report sequence
                 logger.warning("no ongoing report sequence for user %s", str(account.user_id))
@@ -90,6 +102,7 @@ def sync_user_gmail_message(email: str, history_id: int):
                 ),
             )
             send_report_update_message(report_update_message, str(latest_report.id))
+            logger.info("send sqs report update message")
 
             # update report content
             Report.update_content_subfield(session, latest_report.id, "messages_in_queue", messages_in_queue)

@@ -61,7 +61,7 @@ class ReportBatchAction(Base):
     )
     logs = Column(
         ARRAY(JSONB),
-        comment='Report Batch Action Logs',
+        comment='Report batch action logs list',
     )
     created_at = Column(
         TIMESTAMP(timezone=True),

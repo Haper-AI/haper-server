@@ -3,7 +3,6 @@ import json
 from datetime import datetime
 
 from googleapiclient.errors import HttpError
-from sqlalchemy.orm import make_transient
 
 from biz.controller import report_update as report_update_ctrl
 from biz.controller.gmail_util import RawGmailInfo
@@ -17,6 +16,7 @@ from biz.model.report.report_batch_action_message import ReportBatchActionMessag
 from biz.model.report.report_update_message import ReportUpdateMessage
 from biz.service.db import get_session, init_db
 from biz.service.sqs import get_sqs_client, init_sqs
+from biz.utils import track_haper_error
 from biz.utils.env import RuntimeEnv
 from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
@@ -189,11 +189,13 @@ if __name__ == '__main__':
 
                 try:
                     sqs_message_obj = sqs_message_model.sqs_message_from_dict(json.loads(message['Body']))
-                    if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE.value:
+                    if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE:
                         handle_report_update(sqs_message_obj.report_update_message)
                     else:
                         handle_report_batch_action(sqs_message_obj.report_batch_action_message)
                 except Exception as e:
+                    file_name, line_number, func_name, text = track_haper_error(e)
+                    logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
                     logger.error(f"Error processing message: {message['MessageId']}, error: {e}")
                     continue
 

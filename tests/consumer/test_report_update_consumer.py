@@ -64,7 +64,7 @@ def patch_langchain_chat_model():
 @pytest.fixture
 def patch_langchain_embedding_model():
     mock_embedding_model = MagicMock()
-    mock_embedding_model.invoke.side_effect = [embeddings] * 3
+    mock_embedding_model.embed_query.side_effect = [embeddings] * 3
 
     with patch('biz.controller.report_update.init_embeddings', return_value=mock_embedding_model) as mock_init_embedding_model:
         yield mock_init_embedding_model

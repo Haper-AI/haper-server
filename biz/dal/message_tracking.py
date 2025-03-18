@@ -2,10 +2,9 @@ from typing import Optional, Union
 
 from sqlalchemy import Column, String, Text, TIMESTAMP, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import Session
 
 from enum import Enum as PyEnum
-
-from sqlalchemy.orm import Session
 
 from .base import Base
 

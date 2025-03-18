@@ -1,5 +1,4 @@
 import datetime
-import traceback
 from functools import wraps
 from typing import Optional
 
@@ -9,6 +8,7 @@ from flask_limiter import RateLimitExceeded
 from pydantic import ValidationError
 from werkzeug.exceptions import UnsupportedMediaType
 
+from biz.utils import track_haper_error
 from biz.utils.env import RuntimeEnv
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse, SError, ResponseCode
@@ -123,8 +123,7 @@ def catch_error(f):
             return resp.return_with_log()
         except Exception as e:
             # TODO: catch other type of Exception like from db, s3, mq, etc.
-            tb = traceback.extract_tb(e.__traceback__)
-            file_name, line_number, func_name, text = tb[-1]  # Get the last (most recent) traceback entry
+            file_name, line_number, func_name, text = track_haper_error(e)
             logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
             resp.set_error(ResponseCode.InternalUnknownError.create_error(str(e)))
             return resp.return_with_log()

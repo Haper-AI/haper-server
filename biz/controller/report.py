@@ -34,7 +34,8 @@ def start_new_reporting_sequence(session: Session, user_id: str):
 def end_reporting_sequence(session: Session, user_id: str):
     latest_report = Report.get_latest_by_user_id(session, user_id, for_update=True)
     if not latest_report:
-        raise ResponseCode.UnsupportedAction.create_error("reporting sequence already ended")
+        logger.warning("reporting sequence already ended")
+        return
     if not latest_report.content:  # if latest report doesn't have content, delete it directly
         Report.delete(session, latest_report.id)
     else:
@@ -275,6 +276,8 @@ generate_email_reply_prompt_template = ChatPromptTemplate.from_template(
         - subject
         - summary
         - reply 
+        
+      2. Output do not include any explanation or additional text. Return reply text only.
     
     Given Email:
       - Sender: {email_sender}

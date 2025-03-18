@@ -53,6 +53,9 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
         if not tracking_record:
             # insert tracking record to db if not exist
             tracking_record = MessageTrackingRecord.add(session, user_id, account_id)
+        else:
+            MessageTrackingRecord.update(session, tracking_record.user_id, tracking_record.account_id,
+                                         status=MessageTrackingStatus.ONGOING)
 
         # if the ongoing message tracking count goes from 0 to 1, start report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
@@ -74,17 +77,20 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
                 }
             ).execute()
 
-            # history_id = gmail_watch_resp.get('historyId')
+            history_id = gmail_watch_resp.get('historyId')
             expiration = gmail_watch_resp.get('expiration')
 
             MessageTrackingRecord.update(
                 session, user_id, account.id,
                 status=MessageTrackingStatus.ONGOING,
-                extra_info={'expiration': expiration}
+                extra_info={
+                    'pre_history_id': history_id,
+                    'expiration': expiration
+                }
             )
-            # NOTE: because of synchronize_session, the field of the object will also be updated, no need to do follow:
-            # tracking_record.status = MessageTrackingStatus.ONGOING
-            # tracking_record.updated_at = datetime.now(timezone.utc)
+
+            tracking_record.status = MessageTrackingStatus.ONGOING
+            tracking_record.updated_at = datetime.now(timezone.utc)
 
             if credential.token != account.access_token:
                 Account.update(
@@ -137,9 +143,10 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
                 labelFilterBehavior="INCLUDE"
             ).execute()
 
-            # history_id = gmail_watch_resp.get('historyId')
+            history_id = gmail_watch_resp.get('historyId')
             expiration = gmail_watch_resp.get('expiration')
             extra_info['expiration'] = expiration
+            extra_info['pre_history_id'] = history_id
 
         # create tracking record
         tracking_record = MessageTrackingRecord.add(session, user_id, account.id, extra_info=extra_info)
@@ -169,9 +176,8 @@ def end_message_tracking(user_id: str, account_id: str):
             raise ResponseCode.InvalidParam.create_error("current message tracking status can not be ended")
 
         MessageTrackingRecord.update(session, user_id, account.id, status=MessageTrackingStatus.STOPPED)
-        # NOTE: because of synchronize_session, the field of the object will also be updated, no need to do follow:
-        # tracking_record.status = MessageTrackingStatus.STOPPED
-        # tracking_record.updated_at = datetime.now(timezone.utc)
+        tracking_record.status = MessageTrackingStatus.STOPPED
+        tracking_record.updated_at = datetime.now(timezone.utc)
 
         # if the ongoing message tracking count goes from 1 to 0, end report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 0:

@@ -80,6 +80,8 @@ Guidelines:
     - summary: string value, the summary text of current email
     - tags: array of string value, a list of tag about current email
   
+  4. Output do not include any explanation, additional text or markdown characters. Return JSON only.
+  
 Given Email:
   - Sender: {email_sender}
   - Subject: {email_subject}
@@ -115,8 +117,10 @@ Guidelines:
     - user confirmed action
   
   4. Must output the result in json format that contains those keys:
-    - category: string value, the category of the current email",
-    - action: string value, the action of the current email",
+    - category: string value, the category of the current email"
+    - action: string value, the action of the current email"
+    
+  5. Output do not include any explanation, additional text or markdown characters. Return JSON only.
 
 
 History of users emails:
@@ -151,8 +155,9 @@ Guidelines:
     - summary
     - tags
   
-  5. You must output the result as a list of RichText json objects. 
-  And in order to kep summary concise, try to combine some RichText if possible.
+  5. You must output the result as a list of RichText json objects. And in order to kep summary concise, try to 
+  combine some RichText if possible. Do not include any explanation, additional text or markdown characters. 
+  Return JSON only. 
 
 
 Current Summary:
@@ -203,7 +208,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, email: str, 
         email_summary_json = json.loads(email_summary_response.content)
 
         # get embedding for summary
-        summary_embedding = embedding_model.invoke(email_summary_json['summary'])
+        summary_embedding = embedding_model.embed_query(email_summary_json['summary'])
 
         # get similar email history
         with get_session(write=False) as session:
@@ -285,16 +290,17 @@ def update_report_with_gmail_message(user_id: str, account_id: str, email: str, 
     # update report
     report_obj = report_model.report_from_dict(report.content)
 
-    ## update report summary using llm
-    formated_prompt = update_summary_template.format(
-        rich_text_schema=schema_loader.rich_text_schema,
-        example_summary=example_summary,
-        current_summary=json.dumps([r.to_dict() for r in report_obj.summary], ensure_ascii=False),
-        new_incoming_new_messages=json.dumps(info_for_report_summary_update, ensure_ascii=False)
-    )
-    report_summary_response = chat_model.invoke(formated_prompt)
-    report_summary_json = json.loads(report_summary_response.content)
-    report_obj.summary = [rich_text_from_dict(r) for r in report_summary_json]
+    ## update report summary using llm if needed
+    if info_for_report_summary_update:
+        formated_prompt = update_summary_template.format(
+            rich_text_schema=schema_loader.rich_text_schema,
+            example_summary=example_summary,
+            current_summary=json.dumps([r.to_dict() for r in report_obj.summary], ensure_ascii=False),
+            new_incoming_new_messages=json.dumps(info_for_report_summary_update, ensure_ascii=False)
+        )
+        report_summary_response = chat_model.invoke(formated_prompt)
+        report_summary_json = json.loads(report_summary_response.content)
+        report_obj.summary = [rich_text_from_dict(r) for r in report_summary_json]
 
     ## update report content
     if report_obj.content.content_sources is None:
