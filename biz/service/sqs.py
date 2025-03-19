@@ -1,5 +1,4 @@
 import json
-import uuid
 
 import boto3
 from botocore.client import BaseClient
@@ -20,7 +19,7 @@ def init_sqs():
         region_name=RuntimeEnv.Instance().SQS_REGION,
         endpoint_url=RuntimeEnv.Instance().SQS_ENDPOINT,
         aws_access_key_id=RuntimeEnv.Instance().AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=RuntimeEnv.Instance().AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=RuntimeEnv.Instance().AWS_SECRET_ACCESS_KEY,
     )
 
 
@@ -35,7 +34,7 @@ def send_report_update_message(message: ReportUpdateMessage, report_id: str):
         report_batch_action_message=None
     )
     _sqs_client.send_message(
-        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL,
+        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
         MessageBody=json.dumps(sqs_message_obj.to_dict()),
         # MessageGroupId and message MessageDeduplicationId will make sure message that will update the same report
         # will be sent to the same consumer so that it can avoid concurrency issue for report updating.
@@ -53,7 +52,7 @@ def send_report_batch_action_message(message: ReportBatchActionMessage, report_i
     )
 
     _sqs_client.send_message(
-        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL,
+        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
         MessageBody=json.dumps(sqs_message_obj.to_dict()),
         MessageGroupId=report_id,
     )

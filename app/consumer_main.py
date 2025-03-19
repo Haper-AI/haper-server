@@ -165,7 +165,7 @@ if __name__ == '__main__':
     try:
         while True:
             response = get_sqs_client().receive_message(
-                QueueUrl=RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL,
+                QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
                 MaxNumberOfMessages=1,
                 WaitTimeSeconds=10,  # long pooling
             )
@@ -182,7 +182,7 @@ if __name__ == '__main__':
                     logger.warning(f"Received message: {message['MessageId']} without body")
                     # ACK message
                     get_sqs_client().delete_message(
-                        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL,
+                        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
                         ReceiptHandle=message['ReceiptHandle']
                     )
                     continue
@@ -201,7 +201,7 @@ if __name__ == '__main__':
 
                 # ACK message
                 get_sqs_client().delete_message(
-                    QueueUrl=RuntimeEnv.Instance().SQS_REPORT_UPDATE_QUEUE_URL,
+                    QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
                     ReceiptHandle=message['ReceiptHandle']
                 )
                 logger.info(f"Successfully ACK message: {message['MessageId']}")
