@@ -98,6 +98,42 @@ def get_report_by_id(report_id: str):
     return resp.return_with_log()
 
 
+def poll_message_processing_status(pre_status: dict, report_id: str):
+    yield json.dumps(pre_status)
+    has_message_in_queue = False
+    for k, v in pre_status.items():
+        if v > 0:
+            has_message_in_queue = True
+            break
+    try:
+        while has_message_in_queue:
+            time.sleep(1)
+            new_status = report_ctrl.poll_report_messages_in_queue_status(report_id)
+            has_update = False
+            has_message_in_queue = False
+            for k, v in new_status.items():
+                if pre_status[k] != v:
+                    has_update = True
+                if v > 0:
+                    has_message_in_queue = True
+
+            if has_update:
+                yield json.dumps(new_status)
+                pre_status = new_status
+    except GeneratorExit:
+        logger.info("Client disconnected")
+
+
+@report_routes.route("/<uuid:report_id>/message-processing-status", methods=["GET"])
+@catch_error
+@jwt_auth
+def message_processing_status(report_id: str):
+    report = report_ctrl.get_report_by_id(request.ctx.user_id, report_id)
+
+    return Response(poll_message_processing_status(report.content.get("messages_in_queue", {}), report_id),
+                    content_type="text/event-stream")
+
+
 @report_routes.route("/<uuid:report_id>", methods=["DELETE"])
 @catch_error
 @jwt_auth

@@ -351,7 +351,6 @@ class TestGenerateReport:
             assert response.status_code == 400
 
 
-
 class TestListReportHistory:
     def test_success(self, client, new_user_report):
         user, _, report = new_user_report
@@ -381,6 +380,40 @@ class TestGetReportById:
         def test_fail_with_non_exist_report(self, client, new_user):
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.get("/api/v1/report/{}".format(uuid.uuid4()))
+            assert response.status_code == 404
+
+
+class TestPollMessageProcessingStatus:
+    class TestSuccess:
+        def test_success_with_messages_in_queue(self, client, new_user_report_with_messages_in_queue):
+            user, _, report = new_user_report_with_messages_in_queue
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.get("/api/v1/report/{}/message-processing-status".format(report.id))
+            with get_session(write=True) as session:
+                Report.update_content_subfield(session, report.id, "messages_in_queue", {"gmail": 0})
+            assert response.status_code == 200
+            assert 'text/event-stream' in response.headers['Content-Type']
+            assert response.data
+
+        def test_success_without_messages_in_queue(self, client, new_user_empty_report):
+            user, _, report = new_user_empty_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.get("/api/v1/report/{}/message-processing-status".format(report.id))
+            assert response.status_code == 200
+            assert 'text/event-stream' in response.headers['Content-Type']
+            assert response.data
+
+    class TestFail:
+        def test_fail_with_invalid_auth(self, client, new_user_empty_report):
+            user, _, report = new_user_empty_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
+            response = client.get("/api/v1/report/{}/message-processing-status".format(report.id))
+            assert response.status_code == 400
+
+        def test_fail_with_non_exist_report(self, client, new_user_empty_report):
+            user, _, report = new_user_empty_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.get("/api/v1/report/{}/message-processing-status".format(str(uuid.uuid4())))
             assert response.status_code == 404
 
 

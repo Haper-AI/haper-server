@@ -266,6 +266,11 @@ def poll_last_batch_action(run_id: str):
         return ReportBatchAction.get_by_id(session, run_id)
 
 
+def poll_report_messages_in_queue_status(report_id: str):
+    with get_session(write=False) as session:
+        return Report.get_content_subfield(session, report_id, "messages_in_queue")
+
+
 generate_email_reply_prompt_template = ChatPromptTemplate.from_template(
     """
     Based given email information and the reply history for similar email, generate an email reply
