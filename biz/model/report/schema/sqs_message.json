@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "$ref": "#/definitions/SQSMessage",
+  "definitions": {
+    "SQSMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "type": "string",
+          "enum": ["report_update", "report_batch_action"]
+        },
+        "report_update_message": {
+          "$ref": "./report_update_message.json#/definitions/ReportUpdateMessage"
+        },
+        "report_batch_action_message": {
+          "$ref": "./report_batch_action_message.json#/definitions/ReportBatchActionMessage"
+        }
+      },
+      "required": [
+        "action_type"
+      ],
+      "title": "SQSMessage"
+    }
+  }
+}

@@ -1,13 +1,14 @@
 import datetime
-import traceback
 from functools import wraps
 from typing import Optional
 
 import jwt
 from flask import request
+from flask_limiter import RateLimitExceeded
 from pydantic import ValidationError
 from werkzeug.exceptions import UnsupportedMediaType
 
+from biz.utils import track_haper_error
 from biz.utils.env import RuntimeEnv
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse, SError, ResponseCode
@@ -19,7 +20,7 @@ class RequestContext:
 
 USER_JWT_AUTH_VALID_PERIOD = datetime.timedelta(days=30)
 
-def gen_jwt_auth(user_id: str, ) -> str:
+def gen_jwt_auth(user_id: str) -> str:
     payload = {
         'id': user_id,
         'exp': datetime.datetime.now(datetime.timezone.utc) + USER_JWT_AUTH_VALID_PERIOD,
@@ -60,8 +61,8 @@ def jwt_auth(f):
                 return resp.return_with_log()
 
             # store user_id in request context
-            if not request.ctx:
-                request.ctx = RequestContext()
+            if not hasattr(request, 'ctx'):
+                setattr(request, 'ctx', RequestContext())
             request.ctx.user_id = user_id
 
             # execute next handler
@@ -117,10 +118,12 @@ def catch_error(f):
             # Handle pydantic validation errors and return appropriate response
             resp.set_error(ResponseCode.InvalidParam.create_error(validation_error_to_str(e)))
             return resp.return_with_log()
+        except RateLimitExceeded:
+            resp.set_error(ResponseCode.UnsupportedAction.create_error("too many requests"))
+            return resp.return_with_log()
         except Exception as e:
             # TODO: catch other type of Exception like from db, s3, mq, etc.
-            tb = traceback.extract_tb(e.__traceback__)
-            file_name, line_number, func_name, text = tb[-1]  # Get the last (most recent) traceback entry
+            file_name, line_number, func_name, text = track_haper_error(e)
             logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
             resp.set_error(ResponseCode.InternalUnknownError.create_error(str(e)))
             return resp.return_with_log()

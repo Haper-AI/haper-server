@@ -1,0 +1,24 @@
+{
+  "$id": "report_batch_action_message.json",
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "$ref": "#/definitions/ReportBatchActionMessage",
+  "definitions": {
+    "ReportBatchActionMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_id",
+        "run_id"
+      ],
+      "title": "ReportBatchActionMessage"
+    }
+  }
+}

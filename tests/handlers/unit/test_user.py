@@ -1,12 +1,11 @@
-from .conftest import *
 from biz.utils.response import ResponseCode
-from tests import generate_random_string
+from tests import generate_random_string, generate_random_gmail
 from biz.controller.user import GOOGLE_TOKEN_VALIDATION_URL
 
 
 class TestUserSignupByCredential:
     def test_success(self, client):
-        email = f'{generate_random_string(8)}@gmail.com'
+        email = generate_random_gmail(8)
         response = client.post('/api/v1/user/signup', json={
             'provider': 'credentials',
             'email': email,
@@ -46,7 +45,7 @@ class TestUserSignupByCredential:
             assert response.json['status'] == ResponseCode.InvalidParam.value
 
         def test_fail_by_invalid_password(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             response = client.post('/api/v1/user/signup', json={
                 'provider': 'credentials',
                 'email': email,
@@ -58,7 +57,7 @@ class TestUserSignupByCredential:
 
 class TestUserSignupByOauth:
     def test_success(self, client, requests_mock):
-        email = f'{generate_random_string(8)}@gmail.com'
+        email = generate_random_gmail(8)
         provider_account_id = f'google_{generate_random_string(16)}'
         requests_mock.get(GOOGLE_TOKEN_VALIDATION_URL, json={"email": email})
 
@@ -93,7 +92,7 @@ class TestUserSignupByOauth:
             assert response.json['status'] == ResponseCode.InvalidParam.value
 
         def test_fail_by_missing_provider_id(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             response = client.post('/api/v1/user/signup', json={
                 'provider': 'google',
                 'email': email,
@@ -105,7 +104,7 @@ class TestUserSignupByOauth:
             assert response.json['status'] == ResponseCode.InvalidParam.value
 
         def test_fail_by_missing_access_token(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             response = client.post('/api/v1/user/signup', json={
                 'provider': 'google',
@@ -117,7 +116,7 @@ class TestUserSignupByOauth:
             assert response.json['status'] == ResponseCode.InvalidParam.value
 
         def test_fail_by_invalid_oauth_token(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             response = client.post('/api/v1/user/signup', json={
                 'provider': 'google',
@@ -130,7 +129,7 @@ class TestUserSignupByOauth:
             assert response.status_code == 401
 
         def test_fail_by_expired_oauth_token(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             response = client.post('/api/v1/user/signup', json={
                 'provider': 'google',

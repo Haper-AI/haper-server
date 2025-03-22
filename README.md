@@ -27,6 +27,15 @@ To get started, ensure you have the following installed:
    LOG_LEVEL=<log level, DEBUG for test, INFO for production>
    POSTGRES_DSN=<your postgresql db dsn>
    ALLOW_ORIGINS=<list of allow origins for CORS, separate by comma>
+   
+   GOOGLE_CLIENT_ID=<your google app client id>
+   GOOGLE_CLIENT_SECRET=<your google app secret>
+   
+   SQS_REGION=<your aws sqs region>
+   SQS_ENDPOINT=<your aws sqs endpoint>
+   SQS_REPORT_UPDATE_QUEUE_URL=<your sqs queue url>
+   AWS_ACCESS_KEY_ID=<your aws access key>
+   AWS_SECRET_ACCESS_KEY=<your aws secret key>
    ```
 
 2. Run the application:

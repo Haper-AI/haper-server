@@ -8,10 +8,13 @@ WORKDIR /app/haper-server
 
 # Install Python dependencies
 COPY . .
+
 RUN pip install -r requirements.txt
+
+ENV PYTHONPATH="/app/haper-server"
 
 # Expose the Flask app's port
 EXPOSE 8888
 
-# Command to start the app (update if your app entry point is not `app.py` or if you use Flask run)
-CMD ["gunicorn", "--bind", "0.0.0.0:8888", "app:app"]
+# Default to run flask app
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:8888 -w ${NUM_WORKER:-1} --threads ${NUM_THREAD:-1} app.api_server:app"]

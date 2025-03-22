@@ -1,12 +1,12 @@
-from .conftest import *
-from tests import generate_random_string
+from .conftest import client
+from tests import generate_random_string, generate_random_gmail
 from biz.controller.user import GOOGLE_TOKEN_VALIDATION_URL
 
 
 class TestUserSignupLogin:
     class TestSuccess:
         def test_success_by_credential(self, client):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             response = client.post('/api/v1/user/signup', json={
                 'provider': 'credentials',
                 'email': email,
@@ -22,7 +22,7 @@ class TestUserSignupLogin:
             assert response.status_code == 200
 
         def test_success_by_oauth(self, client, requests_mock):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
 
             requests_mock.get(GOOGLE_TOKEN_VALIDATION_URL, json={"email": email})
@@ -47,7 +47,7 @@ class TestUserSignupLogin:
 
     class TestFail:
         def test_fail_by_wrong_login_method(self, client, requests_mock):
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             # sign up by credential while login in by oauth
             response = client.post('/api/v1/user/signup', json={
@@ -67,7 +67,7 @@ class TestUserSignupLogin:
             })
             assert response.status_code == 400
 
-            email = f'{generate_random_string(8)}@gmail.com'
+            email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             # sign up by oauth while login in by credential
             response = client.post('/api/v1/user/signup', json={

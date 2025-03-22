@@ -9,8 +9,10 @@ from .logger import logger
 class ResponseCode(IntEnum):
     SUCCESS = 0
     InvalidParam = 1001
+    UnsupportedAction = 1002
     InvalidAuth = 1101
     UserNoPermission = 1102
+    ResourceNotFound = 1201
     InternalUnknownError = 9999
 
     def create_error(self, message: str = '') -> 'SError':
@@ -34,7 +36,7 @@ class HTTPResponse:
         self.method = method
         self.uri = uri
         self.elapsed = 0
-        self.time = int(time.time())
+        self.time = int(time.time() * 1000)
         self.data = None
 
     def set_data(self, data):
@@ -43,10 +45,12 @@ class HTTPResponse:
     def set_error(self, err: SError):
         self.status = err.code
         self.message = err.message
-        if self.status == ResponseCode.InvalidParam:
+        if self.status in [ResponseCode.InvalidParam, ResponseCode.UnsupportedAction]:
             self.http_status = 400
         elif self.status in [ResponseCode.InvalidAuth, ResponseCode.UserNoPermission]:
             self.http_status = 401
+        elif self.status == ResponseCode.ResourceNotFound:
+            self.http_status = 404
         elif self.status == ResponseCode.InternalUnknownError:
             self.http_status = 500
 
@@ -76,7 +80,7 @@ class HTTPResponse:
             'status': self.status,
             'message': self.message,
             'uri': self.uri,
-            'elapsed': int(time.time() - self.time),
+            'elapsed': int(time.time() * 1000 - self.time),
             'data': self.data,
         })
         for cookie in self.cookie_response.headers.getlist("Set-Cookie"):
