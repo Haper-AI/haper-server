@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from sqlalchemy.orm import make_transient
 
+from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
 from biz.dal.report import Report
 from biz.dal.user import Account, User
@@ -79,12 +80,12 @@ class TestMessageTrackingStart:
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account": {
-                    "provider": "google",
+                    "provider": AccountProvider.Google,
                     "provider_account_id": generate_random_string(16),
                     "access_token": "access_token",
                     "refresh_token": "refresh_token",
                     "expires_at": int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-                    "email": "email",
+                    "email": new_user.email,
                 }
             })
             assert response.status_code == 200

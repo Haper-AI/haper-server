@@ -16,7 +16,7 @@ class GmailInfo:
     snippet: str
     mime_type: str
     receive_at: datetime
-    sender: str
+    sender: str # sender that contains name and email in the form of "{sender_name} <{sender_email}>"
     sender_name: str
     sender_email: str
     to: str

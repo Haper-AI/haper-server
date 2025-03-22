@@ -278,9 +278,7 @@ def test_handle_report_update_message():
         report_id=str(report.id),
         messages=rum_model.Messages(
             gmail=rum_model.Gmail(
-                account_info=rum_model.AccountInfo(
-                    account_id=account.id
-                ),
+                account_id=account.id,
                 new_messages=[
                     rum_model.GmailNewMessage(
                         message_id="1",
@@ -295,7 +293,8 @@ def test_handle_report_update_message():
                         thread_id="3",
                     )
                 ],
-            )
+            ),
+            outlook=None
         ),
     )
 

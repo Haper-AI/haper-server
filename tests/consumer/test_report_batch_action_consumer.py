@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy.orm import make_transient
 
 from app.consumer_main import handle_report_batch_action
+from biz.dal.user import AccountProvider
 from biz.dal.report import MessageAction, MessageCategory, Report, ReportStatus
 from biz.dal.report_batch_action import ReportBatchAction
 from biz.dal.user import User, Account
@@ -37,7 +38,7 @@ def new_user_report():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(
-            session, user.id, "google", generate_random_string(16),
+            session, user.id, AccountProvider.Google, generate_random_string(16),
             "access_token", "refresh_token",
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email

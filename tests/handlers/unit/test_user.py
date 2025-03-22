@@ -1,3 +1,4 @@
+from biz.dal.user import AccountProvider
 from biz.utils.response import ResponseCode
 from tests import generate_random_string, generate_random_gmail
 from biz.controller.user import GOOGLE_TOKEN_VALIDATION_URL
@@ -62,7 +63,7 @@ class TestUserSignupByOauth:
         requests_mock.get(GOOGLE_TOKEN_VALIDATION_URL, json={"email": email})
 
         response = client.post('/api/v1/user/signup', json={
-            'provider': 'google',
+            'provider': AccountProvider.Google,
             'email': email,
             'provider_account_id': provider_account_id,
             'access_token': 'google_access_token',
@@ -81,7 +82,7 @@ class TestUserSignupByOauth:
     class TestFail:
         def test_fail_by_invalid_email(self, client):
             response = client.post('/api/v1/user/signup', json={
-                'provider': 'google',
+                'provider': AccountProvider.Google,
                 'email': 'sample',
                 'provider_account_id': 'google_1234567890',
                 'access_token': 'google_access_token',
@@ -94,7 +95,7 @@ class TestUserSignupByOauth:
         def test_fail_by_missing_provider_id(self, client):
             email = generate_random_gmail(8)
             response = client.post('/api/v1/user/signup', json={
-                'provider': 'google',
+                'provider': AccountProvider.Google,
                 'email': email,
                 'password': 'ComplexP@ssw0rd123!',
                 'access_token': 'google_access_token',
@@ -107,7 +108,7 @@ class TestUserSignupByOauth:
             email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             response = client.post('/api/v1/user/signup', json={
-                'provider': 'google',
+                'provider': AccountProvider.Google,
                 'email': email,
                 'provider_account_id': provider_account_id,
                 'refresh_token': 'google_refresh_token',
@@ -119,7 +120,7 @@ class TestUserSignupByOauth:
             email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             response = client.post('/api/v1/user/signup', json={
-                'provider': 'google',
+                'provider': AccountProvider.Google,
                 'email': email,
                 'provider_account_id': provider_account_id,
                 'access_token': 'invalid_token',
@@ -132,7 +133,7 @@ class TestUserSignupByOauth:
             email = generate_random_gmail(8)
             provider_account_id = f'google_{generate_random_string(16)}'
             response = client.post('/api/v1/user/signup', json={
-                'provider': 'google',
+                'provider': AccountProvider.Google,
                 'email': email,
                 'provider_account_id': provider_account_id,
                 'access_token': 'expired_token',

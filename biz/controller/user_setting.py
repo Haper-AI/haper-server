@@ -1,9 +1,17 @@
+from datetime import datetime
 from typing import List
 
 from sqlalchemy.orm import make_transient
 
+from biz.controller.report import end_reporting_sequence
+from biz.dal.user import AccountProvider
+from biz.dal.message_tracking import MessageTrackingStatus, MessageTrackingRecord
+from biz.dal.user import Account, User
 from biz.dal.user_setting import UserSetting
 from biz.service.db import get_session
+from biz.utils.gmail import build_gmail_client
+from biz.utils.logger import logger
+from biz.utils.microsoft import build_microsoft_graph_client
 from biz.utils.response import ResponseCode
 
 
@@ -38,3 +46,36 @@ def update_user_setting(user_id: str, key_message_tags: List[str]):
 
     user_setting.key_message_tags = key_message_tags
     return user_setting
+
+def delete_user(user_id: str):
+    with get_session(write=True) as session:
+        # end all message tracking for user
+        message_tracking_statuses = MessageTrackingRecord.list_by_user_id(session, user_id, ongoing_only=True)
+        for t in message_tracking_statuses:
+            account = Account.get_by_id(session, t.account_id)
+            try:
+                if account.provider == AccountProvider.Google:
+                    gmail_api_client, credential = build_gmail_client(
+                        account.access_token,
+                        account.refresh_token,
+                        account.expires_at
+                    )
+
+                    gmail_api_client.users().stop(userId='me').execute()
+                if account.provider == "microsoft":
+                    msgraph_api_client, credential = build_microsoft_graph_client(
+                        account.access_token,
+                        account.refresh_token,
+                        account.expires_at
+                    )
+                    msgraph_api_client.subscriptions().by_subscription_id(
+                        t.extra_info["subscription_id"]).delete()
+                    pass
+            except Exception as e:
+                logger.error("error happened when stop messaging: {}".format(str(e)))
+
+        # end report sequence
+        end_reporting_sequence(session, user_id)
+
+        # mark user as delete
+        User.mark_deleted(session, user_id)

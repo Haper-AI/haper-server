@@ -1,12 +1,14 @@
+from datetime import datetime
+
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from .env import RuntimeEnv
 
-def build_gmail_client(access_token, refresh_token, expiry):
+def build_gmail_client(access_token: str, refresh_token: str, expiry: int):
     credential = Credentials(
         token=access_token,
         refresh_token=refresh_token,
-        expiry=expiry,
+        expiry=datetime.fromtimestamp(expiry),
         token_uri="https://accounts.google.com/o/oauth2/token",
         client_id=RuntimeEnv.Instance().GOOGLE_CLIENT_ID,
         client_secret=RuntimeEnv.Instance().GOOGLE_CLIENT_SECRET

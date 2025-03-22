@@ -1,4 +1,5 @@
 import uuid
+from enum import Enum
 from typing import Optional, Union
 
 from sqlalchemy import (
@@ -58,6 +59,17 @@ class User(Base):
         server_default=func.now(),
         comment='UTC timestamp when the user was created'
     )
+    deleted_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='UTC timestamp when the user was deleted'
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment='UTC timestamp when the user was last updated'
+    )
 
     @classmethod
     def add(cls, session: Session, name: str, email: str, email_verified: bool = False,
@@ -88,6 +100,15 @@ class User(Base):
         :return: User object or None if not found
         """
         return session.query(cls).filter(cls.email == email).first()
+
+    @classmethod
+    def mark_deleted(cls, session: Session, user_id: Union[str, UUID]):
+        session.query(cls).filter_by(id=user_id).update({'deleted_at': func.now()})
+
+
+class AccountProvider(str, Enum):
+    Google = "google"
+    Microsoft = "microsoft"
 
 
 class Account(Base):
@@ -149,7 +170,7 @@ class Account(Base):
     @classmethod
     def add(cls, session: Session, user_id: Union[str, UUID], provider: str, provider_account_id: str,
             access_token: str, refresh_token: Optional[str] = None, expires_at: Optional[int] = None,
-            email: Optional[str]=None):
+            email: Optional[str] = None):
         account = cls(
             user_id=user_id,
             provider=provider,
@@ -176,8 +197,8 @@ class Account(Base):
         return session.query(cls).filter_by(provider=provider, provider_account_id=provider_account_id).first()
 
     @classmethod
-    def get_by_gmail(cls, session: Session, email: str):
-        return session.query(cls).filter_by(email=email, provider="google").first()
+    def get_by_mail_and_provider(cls, session: Session, email: str, provider: str):
+        return session.query(cls).filter_by(email=email, provider=provider).first()
 
     @classmethod
     def update(cls, session: Session, account_id: Union[str, UUID],

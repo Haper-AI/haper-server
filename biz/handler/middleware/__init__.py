@@ -8,6 +8,8 @@ from flask_limiter import RateLimitExceeded
 from pydantic import ValidationError
 from werkzeug.exceptions import UnsupportedMediaType
 
+from biz.dal.user import User
+from biz.service.db import get_session
 from biz.utils import track_haper_error
 from biz.utils.env import RuntimeEnv
 from biz.utils.logger import logger
@@ -59,6 +61,13 @@ def jwt_auth(f):
             if not user_id:
                 resp.set_error(ResponseCode.InvalidAuth.create_error('Invalid token, unknown user_id'))
                 return resp.return_with_log()
+
+            with get_session(write=False) as session:
+                # get user
+                user = User.get_by_id(session, user_id)
+                if not user or user.deleted_at:
+                    resp.set_error(ResponseCode.UnsupportedAction.create_error("user does not exist"))
+                    return resp.return_with_log()
 
             # store user_id in request context
             if not hasattr(request, 'ctx'):
@@ -124,7 +133,7 @@ def catch_error(f):
         except Exception as e:
             # TODO: catch other type of Exception like from db, s3, mq, etc.
             file_name, line_number, func_name, text = track_haper_error(e)
-            logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
+            logger.error(f"Error in {file_name}:{line_number}, in {func_name}: {text}")
             resp.set_error(ResponseCode.InternalUnknownError.create_error(str(e)))
             return resp.return_with_log()
 

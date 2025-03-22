@@ -4,7 +4,7 @@ from flask import Flask
 from sqlalchemy import text
 
 from biz.service.rate_limiter import user_limiter
-from biz.service.sqs import init_sqs, get_sqs_client
+from biz.service.aws.sqs import init_sqs, get_sqs_client
 from biz.utils.env import RuntimeEnv
 from biz.handler import api_v1
 from biz.service.db import init_db, get_engine, get_session

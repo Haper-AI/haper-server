@@ -60,23 +60,23 @@ class Annotations:
 
 
 class Email:
-    email: str
+    address: str
     name: str
 
-    def __init__(self, email: str, name: str) -> None:
-        self.email = email
+    def __init__(self, address: str, name: str) -> None:
+        self.address = address
         self.name = name
 
     @staticmethod
     def from_dict(obj: Any) -> 'Email':
         assert isinstance(obj, dict)
-        email = from_str(obj.get("email"))
+        address = from_str(obj.get("address"))
         name = from_str(obj.get("name"))
-        return Email(email, name)
+        return Email(address, name)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["email"] = from_str(self.email)
+        result["address"] = from_str(self.address)
         result["name"] = from_str(self.name)
         return result
 

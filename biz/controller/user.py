@@ -4,7 +4,10 @@ import requests
 from typing import Optional
 
 from cryptography.exceptions import InvalidKey
+from psycopg.errors import UniqueViolation
+from sqlalchemy.exc import IntegrityError
 
+from biz.dal.user import AccountProvider
 from biz.service.db import get_session
 from biz.dal.user import User, Account
 from biz.utils.response import ResponseCode
@@ -34,14 +37,14 @@ def compare_password(hashed_password: str, password: str) -> bool:
 
 
 def validate_oauth_token(provider: str, access_token: str) -> bool:
-    if provider == 'google':
+    if provider == AccountProvider.Google:
         url = f'{GOOGLE_TOKEN_VALIDATION_URL}?access_token={access_token}'
         response = requests.get(url)
         if response.status_code != 200:
             return False
         data = response.json()
         return data.get('email') is not None
-    return False
+    return True
 
 
 def signup_user_by_credential(email: str, password: str):
@@ -65,8 +68,9 @@ def signup_user_by_credential(email: str, password: str):
 def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
                          access_token: str, refresh_token: Optional[str], expires_at: Optional[int],
                          name: Optional[str], image: Optional[str]):
-    if not validate_oauth_token(provider, access_token):
-        raise ResponseCode.InvalidAuth.create_error("Invalid or expired OAuth token.")
+    if provider == AccountProvider.Google:
+        if not validate_oauth_token(provider, access_token):
+            raise ResponseCode.InvalidAuth.create_error("Invalid or expired OAuth token.")
 
     with get_session(write=True) as session:
         account = Account.get_by_provider_and_provider_id(session, provider, provider_account_id)
@@ -75,7 +79,13 @@ def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
 
         if not name:
             name = email_to_name(email)
-        user = User.add(session, name, email, email_verified=True, image=image)
+        try:
+            user = User.add(session, name, email, email_verified=True, image=image)
+        except IntegrityError as e:
+            if isinstance(e.orig, UniqueViolation):
+                raise ResponseCode.InvalidParam.create_error("Email {} already registered.".format(email))
+            else:
+                raise e
         account = Account.add(session, user.id, provider, provider_account_id,
                               access_token, refresh_token, expires_at, email)
         make_transient(user), make_transient(account)

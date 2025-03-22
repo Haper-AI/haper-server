@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from sqlalchemy.orm import make_transient
 
+from biz.dal.user import AccountProvider
 from biz.dal.email import Email
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, BatchActionRunStatus
@@ -29,7 +30,7 @@ def new_user_empty_report():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(
-            session, user.id, "google", generate_random_string(16),
+            session, user.id, AccountProvider.Google, generate_random_string(16),
             "access_token", "refresh_token",
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email
@@ -45,7 +46,7 @@ def new_user_report():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(
-            session, user.id, "google", generate_random_string(16),
+            session, user.id, AccountProvider.Google, generate_random_string(16),
             "access_token", "refresh_token",
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email
@@ -62,7 +63,7 @@ def new_user_report():
                 report_model.RichText(
                     type=rich_text_model.TypeEnum.EMAIL,
                     text=None,
-                    email=rich_text_model.Email(email=email, name="email name"),
+                    email=rich_text_model.Email(address=email, name="email name"),
                     annotations=rich_text_model.Annotations(
                         bold=True,
                     ),
@@ -139,7 +140,7 @@ def new_user_report_with_done_action():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(
-            session, user.id, "google", generate_random_string(16),
+            session, user.id, AccountProvider.Google, generate_random_string(16),
             "access_token", "refresh_token",
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email
@@ -156,7 +157,7 @@ def new_user_report_with_done_action():
                 report_model.RichText(
                     type=rich_text_model.TypeEnum.EMAIL,
                     text=None,
-                    email=rich_text_model.Email(email=email, name="email name"),
+                    email=rich_text_model.Email(address=email, name="email name"),
                     annotations=rich_text_model.Annotations(
                         bold=True,
                     ),
@@ -206,7 +207,7 @@ def new_user_report_with_reply_action_and_no_reply_message():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(
-            session, user.id, "google", generate_random_string(16),
+            session, user.id, AccountProvider.Google, generate_random_string(16),
             "access_token", "refresh_token",
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email
@@ -223,7 +224,7 @@ def new_user_report_with_reply_action_and_no_reply_message():
                 report_model.RichText(
                     type=rich_text_model.TypeEnum.EMAIL,
                     text=None,
-                    email=rich_text_model.Email(email=email, name="email name"),
+                    email=rich_text_model.Email(address=email, name="email name"),
                     annotations=rich_text_model.Annotations(
                         bold=True,
                     ),
@@ -269,7 +270,7 @@ def new_user_report_with_messages_in_queue():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = Account.add(
-            session, user.id, "google", generate_random_string(16),
+            session, user.id, AccountProvider.Google, generate_random_string(16),
             "access_token", "refresh_token",
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email

@@ -4,6 +4,7 @@ from flask import Blueprint, request
 from pydantic import BaseModel, PositiveInt, model_validator
 
 from biz.controller import message_tracking as message_tracking_ctrl
+from biz.dal.user import AccountProvider
 from biz.handler.middleware import catch_error, jwt_auth
 from biz.utils.response import HTTPResponse
 
@@ -30,6 +31,13 @@ class StartMessageTrackingReq(BaseModel):
         refresh_token: Optional[str] = None
         expires_at: Optional[PositiveInt] = None
         email: Optional[str] = None
+
+        @model_validator(mode='after')
+        def validate(self):
+            if self.provider in [AccountProvider.Google, AccountProvider.Microsoft] and self.email is None:
+                raise ValueError("email must be provided for {}".format(self.provider))
+
+            return self
 
     account_id: Optional[str] = None
     account: Optional[_Account] = None

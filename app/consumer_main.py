@@ -1,8 +1,10 @@
+import asyncio
 import base64
 import json
 from datetime import datetime
 
 from googleapiclient.errors import HttpError
+from kiota_abstractions.api_error import APIError
 
 from biz.controller import report_update as report_update_ctrl
 from biz.controller.gmail_util import RawGmailInfo
@@ -15,29 +17,31 @@ from biz.model.report import action_log as action_log_model
 from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.model.report.report_update_message import ReportUpdateMessage
 from biz.service.db import get_session, init_db
-from biz.service.sqs import get_sqs_client, init_sqs
+from biz.service.aws.sqs import get_sqs_client, init_sqs
 from biz.utils import track_haper_error
 from biz.utils.env import RuntimeEnv
 from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
+from biz.utils.microsoft import build_microsoft_graph_client
 
 
 def handle_report_update(the_message: ReportUpdateMessage):
     if the_message.messages.gmail:  # handle gmail messages
-        gmail_account_info = the_message.messages.gmail.account_info
+        account_id = the_message.messages.gmail.account_id
         new_gmail_messages = the_message.messages.gmail.new_messages
 
         # get user account info from db
         with get_session(False) as session:
-            account = Account.get_by_id(session, gmail_account_info.account_id)
+            account = Account.get_by_id(session, account_id)
 
         # use user account info to call gmail api
         gmail_api_client, _ = build_gmail_client(
             account.access_token,
             account.refresh_token,
-            datetime.fromtimestamp(account.expires_at)
+            account.expires_at
         )
 
+        # fetch emails
         emails = []
         for new_gmail_msg in new_gmail_messages:
             try:
@@ -48,17 +52,52 @@ def handle_report_update(the_message: ReportUpdateMessage):
                 emails.append(RawGmailInfo(new_gmail_msg.message_id, new_gmail_msg.thread_id, email_info))
             except HttpError as e:
                 if e.resp.status == 404:
-                    logger.warning(f"Message not found: {new_gmail_msg.message_id}")
+                    logger.warning(f"Gmail not found: {new_gmail_msg.message_id}")
                     continue
 
         # use llm process email info
         report_update_ctrl.update_report_with_gmail_message(
             the_message.user_id,
-            str(gmail_account_info.account_id),
+            str(account_id),
             account.email,
             the_message.report_id,
             emails,
         )
+    elif the_message.messages.outlook:
+        account_id = the_message.messages.outlook.account_id
+        new_mail_ids = the_message.messages.outlook.new_messages
+
+        # get user account info from db
+        with get_session(False) as session:
+            account = Account.get_by_id(session, account_id)
+
+        # use user account info to call outlook api
+        msgraph_api_client, _ = build_microsoft_graph_client(
+            account.access_token,
+            account.refresh_token,
+            account.expires_at
+        )
+
+        # fetch emails
+        emails = []
+        for mail_id in new_mail_ids:
+            try:
+                result = asyncio.run(msgraph_api_client.me.messages.by_message_id(mail_id).get())
+                emails.append(result)
+            except APIError as e:
+                if e.response_status_code == 404:
+                    logger.warning(f"Outlook mail not found: {mail_id}")
+                    continue
+
+        # use llm process email info
+        report_update_ctrl.update_report_with_outlook_emails(
+            the_message.user_id,
+            str(account_id),
+            account.email,
+            the_message.report_id,
+            emails,
+        )
+
 
 def handle_report_batch_action(the_message: ReportBatchActionMessage):
     with get_session(write=True) as session:
@@ -77,7 +116,7 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                 gmail_api_client, credential = build_gmail_client(
                     account.access_token,
                     account.refresh_token,
-                    datetime.fromtimestamp(account.expires_at)
+                    account.expires_at
                 )
 
                 for gmail_item in messages_by_account.messages:

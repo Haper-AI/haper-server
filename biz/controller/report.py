@@ -15,7 +15,7 @@ from biz.dal.user import Account
 from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
-from biz.service.sqs import send_report_batch_action_message
+from biz.service.aws.sqs import send_report_batch_action_message
 from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
 from biz.utils.response import ResponseCode
@@ -357,7 +357,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
         gmail_api_client, credential = build_gmail_client(
             account.access_token,
             account.refresh_token,
-            datetime.fromtimestamp(account.expires_at)
+            account.expires_at
         )
         try:
             raw_email = gmail_api_client.users().messages().get(
@@ -387,6 +387,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
                 yield chunk
 
         return streaming_reply_gen
-
+    elif source == "outlook":
+        pass
     else:
         raise ResponseCode.UnsupportedAction.create_error("unknown source")

@@ -77,3 +77,9 @@ def update_user_setting():
         },
     })
     return resp.return_with_log()
+
+@user_routes.route('/', methods=['DELETE'])
+@catch_error
+@jwt_auth
+def delete_user():
+    resp = HTTPResponse(request.method, request.path)

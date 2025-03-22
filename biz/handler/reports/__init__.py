@@ -15,8 +15,7 @@ from biz.utils.response import HTTPResponse
 report_routes = Blueprint("report_api", __name__, url_prefix="/report")
 
 
-# ---------------------- API routes ----------------------
-@report_routes.route("/newest", methods=["GET"])
+@report_routes.route("/newest")
 @catch_error
 @jwt_auth
 def get_newest_appending_report():
@@ -236,7 +235,7 @@ class GenerateMessageReplyReq(BaseModel):
 @report_routes.route("/<uuid:report_id>/generate-reply", methods=["POST"])
 @catch_error
 @jwt_auth
-@user_limiter.limit("1 per 2 second")
+@user_limiter.limit("1 per 3 second;20 per day")
 def generate_message_reply(report_id: str):
     req = GenerateMessageReplyReq(**request.get_json())
     streaming_reply_gen = report_ctrl.generate_message_reply(
@@ -247,3 +246,6 @@ def generate_message_reply(report_id: str):
         req.id,
     )
     return Response(streaming_reply_gen(), content_type="text/event-stream")
+
+
+__all__ = ['report_routes']
