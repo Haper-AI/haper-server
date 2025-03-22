@@ -62,19 +62,20 @@ def outlook_sync():
     logger.info("received outlook sync request: %s", value)
     message_ids_by_email: Dict[str, List[str]] = {}
     for v in value:
-        encrypted_data_key = v["encryptedContent"]["dataKey"]
+        encrypted_data_key = base64.b64decode(v["encryptedContent"]["dataKey"])
         private_key = serialization.load_pem_private_key(
             get_outlook_sub_private().encode('utf-8'),
             password=None,
             backend=default_backend()
         )
         data_key = private_key.decrypt(
-            base64.b64decode(encrypted_data_key),
+            encrypted_data_key,
             asym_padding.OAEP(
                 mgf=asym_padding.MGF1(algorithm=hashes.SHA1()),
                 algorithm=hashes.SHA1(),
                 label=None
-            ))
+            )
+        )
 
         # verify data signature
         data_signature = base64.b64decode(v["encryptedContent"]["dataSignature"])

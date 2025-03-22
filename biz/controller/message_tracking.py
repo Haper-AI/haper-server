@@ -64,6 +64,7 @@ def watch_gmail(access_token: str, refresh_token: str, expires_at: int):
     expiration = gmail_watch_resp.get('expiration')
     return history_id, expiration, credential
 
+
 def watch_outlook(access_token: str, refresh_token: str, expires_at: int):
     # see more from: https://learn.microsoft.com/en-us/graph/api/subscription-post-subscriptions?view=graph-rest-1.0&tabs=python#tabpanel_1_python
     msgraph_api_client, credential = build_microsoft_graph_client(
@@ -87,6 +88,7 @@ def watch_outlook(access_token: str, refresh_token: str, expires_at: int):
     subscribe = asyncio.run(msgraph_api_client.subscriptions.post(request_body))
     subscription_id = subscribe.id
     return subscription_id, int(watch_expires_at.timestamp()), credential
+
 
 def start_message_tracking_with_existing_account(user_id: str, account_id: str):
     with get_session(write=True) as session:
@@ -258,8 +260,8 @@ def end_message_tracking(user_id: str, account_id: str):
                 account.refresh_token,
                 account.expires_at
             )
-            msgraph_api_client.subscriptions().by_subscription_id(
-                tracking_record.extra_info["subscription_id"]).delete()
+            asyncio.run(msgraph_api_client.subscriptions().by_subscription_id(
+                tracking_record.extra_info["subscription_id"]).delete())
 
             if credential.access_token != account.access_token:
                 Account.update(
