@@ -50,7 +50,6 @@ class Email(Base):
     )
     message_id = Column(
         String(128),
-        unique=True,
         nullable=False,
         comment='Unique identifier for the email from the message source'
     )

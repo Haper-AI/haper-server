@@ -19,7 +19,7 @@ def extract_outlook_info(email_info: dict):
     extracted_outlook_info.message_id = email_info["id"]
     extracted_outlook_info.thread_id = email_info.get("conversationId")
     receive_at_str = email_info["receivedDateTime"]
-    extracted_outlook_info.receive_at = datetime.strptime(receive_at_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+    extracted_outlook_info.receive_at = datetime.strptime(receive_at_str, "%Y-%m-%dT%H:%M:%SZ")
     sender_info_dict = email_info["sender"]["emailAddress"]
     extracted_outlook_info.sender_name = sender_info_dict["name"]
     extracted_outlook_info.sender_email = sender_info_dict["address"]

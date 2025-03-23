@@ -12,17 +12,20 @@ from app.consumer_main import handle_report_update
 from biz.controller.report_update import example_summary
 from biz.dal.email import Email
 from biz.dal.report import Report, MessageCategory, MessageAction
-from biz.dal.user import User, Account
+from biz.dal.user import User, Account, AccountProvider
 from biz.model.report import report_update_message as rum_model
 from biz.service.db import get_session
 from biz.model.report import report as report_model
 from tests import generate_random_gmail, generate_random_string
 
+
 class ObjectWithContent:
     def __init__(self, content):
         self.content = content
 
+
 embeddings = [random.uniform(-1, 1) for _ in range(768)]
+
 
 @pytest.fixture
 def patch_langchain_chat_model():
@@ -55,7 +58,7 @@ def patch_langchain_chat_model():
         })),
         ObjectWithContent(example_summary)
     ]
-    mock_chat_model.invoke.side_effect=invoke_return
+    mock_chat_model.invoke.side_effect = invoke_return
 
     with patch('biz.controller.report_update.init_chat_model', return_value=mock_chat_model) as mock_init_chat_model:
         yield mock_init_chat_model
@@ -66,7 +69,8 @@ def patch_langchain_embedding_model():
     mock_embedding_model = MagicMock()
     mock_embedding_model.embed_query.side_effect = [embeddings] * 3
 
-    with patch('biz.controller.report_update.init_embeddings', return_value=mock_embedding_model) as mock_init_embedding_model:
+    with patch('biz.controller.report_update.init_embeddings',
+               return_value=mock_embedding_model) as mock_init_embedding_model:
         yield mock_init_embedding_model
 
 
@@ -218,7 +222,7 @@ def patch_gmail_get_message():
 @pytest.mark.usefixtures("patch_langchain_chat_model")
 @pytest.mark.usefixtures("patch_langchain_embedding_model")
 @pytest.mark.usefixtures("patch_gmail_get_message")
-def test_handle_report_update_message():
+def test_handle_report_update_gmail_message():
     email = generate_random_gmail(10)
     report_obj = report_model.Report(
         messages_in_queue={
@@ -232,11 +236,12 @@ def test_handle_report_update_message():
     )
     with get_session(write=True) as session:
         user = User.add(session, generate_random_string(5), email)
-        account = Account.add(session, user.id, "google", generate_random_string(16),
-                              "access_token", "refresh_token",
-                              expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-                              email=email
-                              )
+        account = Account.add(
+            session, user.id, AccountProvider.Google, generate_random_string(16),
+            "access_token", "refresh_token",
+            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            email=email
+        )
         report = Report.add(session, user.id, report_obj.to_dict())
         emails = [
             Email(
@@ -295,6 +300,182 @@ def test_handle_report_update_message():
                 ],
             ),
             outlook=None
+        ),
+    )
+
+    handle_report_update(report_update_message)
+
+
+@pytest.fixture
+def patch_outlook_get_message():
+    mock_outlook_client = MagicMock()
+
+    async def email_data_1():
+        return {
+            "id": "outlook_email_id_1",
+            "conversationId": "outlook_conversation_id_1",
+            "receivedDateTime": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sender": {
+                "emailAddress": {
+                    "name": "some sender 1",
+                    "address": "somesender.1@outlook.com"
+                },
+            },
+            "toRecipients": {
+                "emailAddress": {
+                    "name": "some receiver 1",
+                    "address": "somereceiver.1@outlook.com"
+                }
+            },
+            "subject": "some subject 1",
+            "body": {
+                "contentType": "text",
+                "content": "some content 1",
+            }
+        }
+
+    async def email_data_2():
+        return {
+            "id": "outlook_email_id_2",
+            "conversationId": "outlook_conversation_id_2",
+            "receivedDateTime": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sender": {
+                "emailAddress": {
+                    "name": "some sender 2",
+                    "address": "somesender.2@outlook.com"
+                },
+            },
+            "toRecipients": {
+                "emailAddress": {
+                    "name": "some receiver 2",
+                    "address": "somereceiver.2@outlook.com"
+                }
+            },
+            "subject": "some subject 2",
+            "body": {
+                "contentType": "html",
+                "content": """
+                    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+                    <html xmlns="http://www.w3.org/1999/xhtml"
+                    xmlns:v="urn:schemas-microsoft-com:vml"
+                    xmlns:o="urn:schemas-microsoft-com:office:office">
+                    <head>
+                    </head>
+                    <body>
+                    </body>
+                    </html>
+                    """,
+            }
+        }
+
+    async def email_data_3():
+        return {
+            "id": "outlook_email_id_3",
+            "conversationId": "outlook_conversation_id_3",
+            "receivedDateTime": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sender": {
+                "emailAddress": {
+                    "name": "some sender 3",
+                    "address": "somesender.3@outlook.com"
+                },
+            },
+            "toRecipients": {
+                "emailAddress": {
+                    "name": "some receiver 3",
+                    "address": "somereceiver.3@outlook.com"
+                }
+            },
+            "subject": "some subject 3",
+            "body": {
+                "contentType": "text",
+                "content": """
+                    Some content 3
+                    """,
+            }
+        }
+
+    mock_outlook_client.me.messages.by_message_id.return_value.get.side_effect = [
+        email_data_1(),
+        email_data_2(),
+        email_data_3(),
+    ]
+
+    mock_credential = MagicMock()
+    mock_credential.token = generate_random_string(10)
+    mock_credential.expiry = datetime.now() + timedelta(hours=2)
+    with patch('app.consumer_main.build_microsoft_graph_client',
+               return_value=(mock_outlook_client, mock_credential)) as mock_build_gmail_account:
+        yield mock_build_gmail_account
+
+
+@pytest.mark.usefixtures("patch_langchain_chat_model")
+@pytest.mark.usefixtures("patch_langchain_embedding_model")
+@pytest.mark.usefixtures("patch_outlook_get_message")
+def test_handle_report_update_outlook_message():
+    email = generate_random_gmail(10)
+    report_obj = report_model.Report(
+        messages_in_queue={
+            "outlook": 3
+        },
+        summary=[],
+        content=report_model.ReportContent(
+            content_sources=[],
+            gmail=None
+        )
+    )
+    with get_session(write=True) as session:
+        user = User.add(session, generate_random_string(5), email)
+        account = Account.add(
+            session, user.id, AccountProvider.Microsoft, generate_random_string(16),
+            "access_token", "refresh_token",
+            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+            email=email
+        )
+        report = Report.add(session, user.id, report_obj.to_dict())
+        emails = [
+            Email(
+                user_id=user.id,
+                source="outlook",
+                message_id="message-id-1",
+                thread_id="message-id-1",
+                sender="someone <someone@gmail.com>",
+                receiver=email,
+                subject="some subject",
+                received_at=datetime.now(timezone.utc),
+                tags=["tag1", "tag2"],
+                summary="some summary",
+                summary_embedding=embeddings,
+                llm_category=MessageCategory.Essential,
+                llm_action=MessageAction.Read
+            ),
+            Email(
+                user_id=user.id,
+                source="outlook",
+                message_id="message-id-2",
+                thread_id="message-id-2",
+                sender="someone <someone@gmail.com>",
+                receiver=email,
+                subject="some subject",
+                received_at=datetime.now(timezone.utc),
+                tags=["tag3", "tag4"],
+                summary="some summary",
+                summary_embedding=embeddings,
+                llm_category=MessageCategory.Essential,
+                llm_action=MessageAction.Read
+            )
+        ]
+        session.add_all(emails)
+        make_transient(user), make_transient(account), make_transient(report)
+
+    report_update_message = rum_model.ReportUpdateMessage(
+        user_id=str(user.id),
+        report_id=str(report.id),
+        messages=rum_model.Messages(
+            gmail=None,
+            outlook=rum_model.Outlook(
+                account_id=account.id,
+                new_messages=["outlook_email_id_1", "outlook_email_id_2", "outlook_email_id_3"],
+            )
         ),
     )
 
