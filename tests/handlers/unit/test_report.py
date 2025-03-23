@@ -111,7 +111,8 @@ def new_user_report():
                             )
                         ]
                     )
-                ]
+                ],
+                outlook=None
             )
         )
         report = Report.add(session, user.id, report_obj.to_dict())
@@ -172,7 +173,8 @@ def new_user_report_with_done_action():
                             )
                         ]
                     )
-                ]
+                ],
+                outlook=None,
             )
         )
         report = Report.add(session, user.id, report_obj.to_dict())
@@ -234,7 +236,8 @@ def new_user_report_with_reply_action_and_no_reply_message():
                             )
                         ]
                     )
-                ]
+                ],
+                outlook=None
             )
         )
         report = Report.add(session, user.id, report_obj.to_dict())
@@ -258,7 +261,8 @@ def new_user_report_with_messages_in_queue():
             summary=[],
             content=report_model.ReportContent(
                 content_sources=[],
-                gmail=None
+                gmail=None,
+                outlook=None,
             )
         )
         report = Report.add(session, user.id, report_obj.to_dict())

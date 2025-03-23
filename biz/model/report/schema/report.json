@@ -44,6 +44,12 @@
           "items": {
             "$ref": "#/definitions/MailMessagesByAccount"
           }
+        },
+        "outlook": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MailMessagesByAccount"
+          }
         }
       },
       "required": [

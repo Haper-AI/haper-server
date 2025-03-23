@@ -105,7 +105,7 @@ def mock_gmail_and_outlook():
         return None
 
     mock_outlook = MagicMock()
-    mock_outlook.subscriptions.return_value.by_subscription_id.return_value.delete = delete_sub
+    mock_outlook.subscriptions.by_subscription_id.return_value.delete = delete_sub
 
     with patch('biz.controller.user_setting.build_gmail_client',
                return_value=(MagicMock(), None)) as mock_gmail_client:

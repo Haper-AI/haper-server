@@ -4,6 +4,7 @@ from typing import List
 from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 from langchain_core.prompts import ChatPromptTemplate
+from msgraph.generated.models.message import Message
 
 from biz.controller.gmail_util import RawGmailInfo, extract_gmail_info
 from biz.controller.outlook_util import extract_outlook_info
@@ -343,13 +344,13 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
             content_subfield_key="messages_in_queue",
             for_update=True
         )
-        messages_in_queue["gmail"] -= len(gmail_list)
+        messages_in_queue[EmailSource.Gmail] -= len(gmail_list)
         report_obj.messages_in_queue = messages_in_queue
         Report.update(session, report_id, content=report_obj.to_dict())
 
 
 def update_report_with_outlook_emails(user_id: str, account_id: str, account_email: str, report_id: str,
-                                     outlook_emails: List[dict]):
+                                     outlook_emails: List[Message]):
     with get_session(write=False) as session:
         # get user focused tags
         user_setting = UserSetting.get_by_user_id(session, user_id)
@@ -423,7 +424,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
         email_db_records.append(
             Email(
                 user_id=user_id,
-                source=EmailSource.Gmail,
+                source=EmailSource.Outlook,
                 message_id=extracted_outlook.message_id,
                 thread_id=extracted_outlook.thread_id,
                 sender=extracted_outlook.sender,
@@ -487,11 +488,11 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
     if EmailSource.Outlook not in report_obj.content.content_sources:
         report_obj.content.content_sources.append(EmailSource.Outlook)
 
-    if report_obj.content.gmail is None:
-        report_obj.content.gmail = []
+    if report_obj.content.outlook is None:
+        report_obj.content.outlook = []
 
     mail_report_item_list_by_account = None
-    for v in report_obj.content.gmail:
+    for v in report_obj.content.outlook:
         if v.account_id == account_id:
             mail_report_item_list_by_account = v
             break
@@ -502,7 +503,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
             email=account_email,
             messages=[]
         )
-        report_obj.content.gmail.append(mail_report_item_list_by_account)
+        report_obj.content.outlook.append(mail_report_item_list_by_account)
 
     with get_session(write=True) as session:
         session.add_all(email_db_records)

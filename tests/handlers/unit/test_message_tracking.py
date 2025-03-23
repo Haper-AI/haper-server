@@ -78,7 +78,7 @@ def patch_outlook_subscription_create_delete():
         return None
 
     mock_outlook_client.subscriptions.post = create_sub
-    mock_outlook_client.subscriptions.return_value.by_subscription_id.return_value.delete = delete_sub
+    mock_outlook_client.subscriptions.by_subscription_id.return_value.delete = delete_sub
 
     mock_credential = MagicMock()
     mock_credential.access_token = generate_random_string(10)

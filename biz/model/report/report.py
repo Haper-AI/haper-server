@@ -52,7 +52,7 @@ def from_bool(x: Any) -> bool:
 
 def from_dict(f: Callable[[Any], T], x: Any) -> Dict[str, T]:
     assert isinstance(x, dict)
-    return { k: f(v) for (k, v) in x.items() }
+    return {k: f(v) for (k, v) in x.items()}
 
 
 class MailMessageItem:
@@ -69,7 +69,9 @@ class MailMessageItem:
     tags: List[str]
     thread_id: str
 
-    def __init__(self, action: str, action_result: Optional[str], category: str, id: int, message_id: str, receive_at: datetime, reply_message: Optional[str], sender: str, subject: str, summary: str, tags: List[str], thread_id: str) -> None:
+    def __init__(self, action: str, action_result: Optional[str], category: str, id: int, message_id: str,
+                 receive_at: datetime, reply_message: Optional[str], sender: str, subject: str, summary: str,
+                 tags: List[str], thread_id: str) -> None:
         self.action = action
         self.action_result = action_result
         self.category = category
@@ -98,7 +100,8 @@ class MailMessageItem:
         summary = from_str(obj.get("summary"))
         tags = from_list(from_str, obj.get("tags"))
         thread_id = from_str(obj.get("thread_id"))
-        return MailMessageItem(action, action_result, category, id, message_id, receive_at, reply_message, sender, subject, summary, tags, thread_id)
+        return MailMessageItem(action, action_result, category, id, message_id, receive_at, reply_message, sender,
+                               subject, summary, tags, thread_id)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -147,23 +150,31 @@ class MailMessagesByAccount:
 class ReportContent:
     content_sources: List[str]
     gmail: Optional[List[MailMessagesByAccount]]
+    outlook: Optional[List[MailMessagesByAccount]]
 
-    def __init__(self, content_sources: List[str], gmail: Optional[List[MailMessagesByAccount]]) -> None:
+    def __init__(self, content_sources: List[str], gmail: Optional[List[MailMessagesByAccount]],
+                 outlook: Optional[List[MailMessagesByAccount]]) -> None:
         self.content_sources = content_sources
         self.gmail = gmail
+        self.outlook = outlook
 
     @staticmethod
     def from_dict(obj: Any) -> 'ReportContent':
         assert isinstance(obj, dict)
         content_sources = from_list(from_str, obj.get("content_sources"))
         gmail = from_union([lambda x: from_list(MailMessagesByAccount.from_dict, x), from_none], obj.get("gmail"))
-        return ReportContent(content_sources, gmail)
+        outlook = from_union([lambda x: from_list(MailMessagesByAccount.from_dict, x), from_none], obj.get("outlook"))
+        return ReportContent(content_sources, gmail, outlook)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["content_sources"] = from_list(from_str, self.content_sources)
         if self.gmail is not None:
-            result["gmail"] = from_union([lambda x: from_list(lambda x: to_class(MailMessagesByAccount, x), x), from_none], self.gmail)
+            result["gmail"] = from_union(
+                [lambda x: from_list(lambda x: to_class(MailMessagesByAccount, x), x), from_none], self.gmail)
+        if self.outlook is not None:
+            result["outlook"] = from_union(
+                [lambda x: from_list(lambda x: to_class(MailMessagesByAccount, x), x), from_none], self.outlook)
         return result
 
 

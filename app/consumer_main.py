@@ -72,7 +72,7 @@ def handle_report_update(the_message: ReportUpdateMessage):
             account = Account.get_by_id(session, account_id)
 
         # use user account info to call outlook api
-        msgraph_api_client, _ = build_microsoft_graph_client(
+        msgraph_api_client, credential = build_microsoft_graph_client(
             account.access_token,
             account.refresh_token,
             account.expires_at
@@ -88,6 +88,16 @@ def handle_report_update(the_message: ReportUpdateMessage):
                 if e.response_status_code == 404:
                     logger.warning(f"Outlook mail not found: {mail_id}")
                     continue
+
+        if credential.access_token != account.access_token:
+            with get_session(True) as session:
+                Account.update(
+                    session,
+                    account.id,
+                    credential.access_token,
+                    refresh_token=credential.refresh_token,
+                    expires_at=credential.expiry,
+                )
 
         # use llm process email info
         report_update_ctrl.update_report_with_outlook_emails(

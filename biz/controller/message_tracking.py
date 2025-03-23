@@ -260,7 +260,7 @@ def end_message_tracking(user_id: str, account_id: str):
                 account.refresh_token,
                 account.expires_at
             )
-            asyncio.run(msgraph_api_client.subscriptions().by_subscription_id(
+            asyncio.run(msgraph_api_client.subscriptions.by_subscription_id(
                 tracking_record.extra_info["subscription_id"]).delete())
 
             if credential.access_token != account.access_token:

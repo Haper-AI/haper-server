@@ -49,12 +49,12 @@ class Email(Base):
         comment='The email source like gmail and outlook'
     )
     message_id = Column(
-        String(128),
+        String(256),
         nullable=False,
         comment='Unique identifier for the email from the message source'
     )
     thread_id = Column(
-        String(128),
+        String(256),
         comment='Identifier for the email thread (if applicable)'
     )
     sender = Column(

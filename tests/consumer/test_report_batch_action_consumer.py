@@ -97,7 +97,8 @@ def new_user_report():
                             )
                         ]
                     )
-                ]
+                ],
+                outlook=None
             )
         )
         report = Report.add(session, user.id, report_obj.to_dict())

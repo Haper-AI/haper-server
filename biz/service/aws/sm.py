@@ -21,7 +21,7 @@ def load_secret():
     )
     secret_values = json.loads(secret_value_resp["SecretString"])
     global _outlook_sub_private
-    _outlook_sub_private = secret_values[RuntimeEnv.Instance().AWS_SM_KEY_NAME_OUTLOOK_SUB_PRIVATE]
+    _outlook_sub_private = secret_values[RuntimeEnv.Instance().AWS_SM_KEY_NAME_OUTLOOK_SUB_PRIVATE].replace(";", "\n")
 
     global _outlook_sub_public_b64
     _outlook_sub_public_b64 = secret_values[RuntimeEnv.Instance().AWS_SM_KEY_NAME_OUTLOOK_SUB_PUBLIC]

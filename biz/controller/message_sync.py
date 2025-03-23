@@ -77,6 +77,7 @@ def sync_user_gmail_message(email: str, history_id: int):
                     content=report_model.ReportContent(
                         content_sources=[],
                         gmail=None,
+                        outlook=None
                     ),
                 ).to_dict())
                 messages_in_queue = {}
@@ -147,6 +148,7 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
                     content=report_model.ReportContent(
                         content_sources=[],
                         gmail=None,
+                        outlook=None
                     ),
                 ).to_dict())
                 messages_in_queue = {}

@@ -69,7 +69,7 @@ def delete_user(user_id: str):
                         account.refresh_token,
                         account.expires_at
                     )
-                    asyncio.run(msgraph_api_client.subscriptions().by_subscription_id(
+                    asyncio.run(msgraph_api_client.subscriptions.by_subscription_id(
                         t.extra_info["subscription_id"]).delete())
 
                 MessageTrackingRecord.update(session, t.user_id, t.account_id, status=MessageTrackingStatus.STOPPED)

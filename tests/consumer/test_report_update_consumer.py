@@ -6,6 +6,11 @@ from email.utils import formatdate
 from unittest.mock import MagicMock, patch
 
 import pytest
+from msgraph.generated.models.body_type import BodyType
+from msgraph.generated.models.email_address import EmailAddress
+from msgraph.generated.models.item_body import ItemBody
+from msgraph.generated.models.message import Message
+from msgraph.generated.models.recipient import Recipient
 from sqlalchemy.orm import make_transient
 
 from app.consumer_main import handle_report_update
@@ -231,7 +236,8 @@ def test_handle_report_update_gmail_message():
         summary=[],
         content=report_model.ReportContent(
             content_sources=[],
-            gmail=None
+            gmail=None,
+            outlook=None,
         )
     )
     with get_session(write=True) as session:
@@ -311,50 +317,42 @@ def patch_outlook_get_message():
     mock_outlook_client = MagicMock()
 
     async def email_data_1():
-        return {
-            "id": "outlook_email_id_1",
-            "conversationId": "outlook_conversation_id_1",
-            "receivedDateTime": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "sender": {
-                "emailAddress": {
-                    "name": "some sender 1",
-                    "address": "somesender.1@outlook.com"
-                },
-            },
-            "toRecipients": {
-                "emailAddress": {
-                    "name": "some receiver 1",
-                    "address": "somereceiver.1@outlook.com"
-                }
-            },
-            "subject": "some subject 1",
-            "body": {
-                "contentType": "text",
-                "content": "some content 1",
-            }
-        }
+        msg = Message()
+        msg.id = "outlook_email_id_1"
+        msg.conversation_id = "outlook_conversation_id_1"
+        msg.received_date_time = datetime.now()
+        msg.sender = Recipient()
+        msg.sender.email_address = EmailAddress()
+        msg.sender.email_address.name = "some sender 1"
+        msg.sender.email_address.address = "somesender.1@outlook.com"
+        msg.to_recipients = [Recipient()]
+        msg.to_recipients[0].email_address = EmailAddress()
+        msg.to_recipients[0].email_address.name = "some recipient 1"
+        msg.to_recipients[0].email_address.address = "somereceiver.1@outlook.com"
+        msg.subject = "some subject 1"
+        msg.body = ItemBody()
+        msg.body.content_type = BodyType.Text
+        msg.body.content = "some content 1"
+
+        return msg
 
     async def email_data_2():
-        return {
-            "id": "outlook_email_id_2",
-            "conversationId": "outlook_conversation_id_2",
-            "receivedDateTime": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "sender": {
-                "emailAddress": {
-                    "name": "some sender 2",
-                    "address": "somesender.2@outlook.com"
-                },
-            },
-            "toRecipients": {
-                "emailAddress": {
-                    "name": "some receiver 2",
-                    "address": "somereceiver.2@outlook.com"
-                }
-            },
-            "subject": "some subject 2",
-            "body": {
-                "contentType": "html",
-                "content": """
+        msg = Message()
+        msg.id = "outlook_email_id_2"
+        msg.conversation_id = "outlook_conversation_id_2"
+        msg.received_date_time = datetime.now()
+        msg.sender = Recipient()
+        msg.sender.email_address = EmailAddress()
+        msg.sender.email_address.name = "some sender 2"
+        msg.sender.email_address.address = "somesender.2@outlook.com"
+        msg.to_recipients = [Recipient()]
+        msg.to_recipients[0].email_address = EmailAddress()
+        msg.to_recipients[0].email_address.name = "some recipient 2"
+        msg.to_recipients[0].email_address.address = "somereceiver.2@outlook.com"
+        msg.subject = "some subject 2"
+        msg.body = ItemBody()
+        msg.body.content_type = BodyType.Html
+        msg.body.content = """
                     <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
                     <html xmlns="http://www.w3.org/1999/xhtml"
                     xmlns:v="urn:schemas-microsoft-com:vml"
@@ -364,35 +362,29 @@ def patch_outlook_get_message():
                     <body>
                     </body>
                     </html>
-                    """,
-            }
-        }
+                    """
+
+        return msg
 
     async def email_data_3():
-        return {
-            "id": "outlook_email_id_3",
-            "conversationId": "outlook_conversation_id_3",
-            "receivedDateTime": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "sender": {
-                "emailAddress": {
-                    "name": "some sender 3",
-                    "address": "somesender.3@outlook.com"
-                },
-            },
-            "toRecipients": {
-                "emailAddress": {
-                    "name": "some receiver 3",
-                    "address": "somereceiver.3@outlook.com"
-                }
-            },
-            "subject": "some subject 3",
-            "body": {
-                "contentType": "text",
-                "content": """
-                    Some content 3
-                    """,
-            }
-        }
+        msg = Message()
+        msg.id = "outlook_email_id_3"
+        msg.conversation_id = "outlook_conversation_id_3"
+        msg.received_date_time = datetime.now()
+        msg.sender = Recipient()
+        msg.sender.email_address = EmailAddress()
+        msg.sender.email_address.name = "some sender 3"
+        msg.sender.email_address.address = "somesender.3@outlook.com"
+        msg.to_recipients = [Recipient()]
+        msg.to_recipients[0].email_address = EmailAddress()
+        msg.to_recipients[0].email_address.name = "some recipient 3"
+        msg.to_recipients[0].email_address.address = "somereceiver.3@outlook.com"
+        msg.subject = "some subject 3"
+        msg.body = ItemBody()
+        msg.body.content_type = BodyType.Text
+        msg.body.content = "some content 3"
+
+        return msg
 
     mock_outlook_client.me.messages.by_message_id.return_value.get.side_effect = [
         email_data_1(),
@@ -401,8 +393,9 @@ def patch_outlook_get_message():
     ]
 
     mock_credential = MagicMock()
-    mock_credential.token = generate_random_string(10)
-    mock_credential.expiry = datetime.now() + timedelta(hours=2)
+    mock_credential.access_token = generate_random_string(10)
+    mock_credential.refresh_token = generate_random_string(10)
+    mock_credential.expiry = int((datetime.now() + timedelta(hours=2)).timestamp())
     with patch('app.consumer_main.build_microsoft_graph_client',
                return_value=(mock_outlook_client, mock_credential)) as mock_build_gmail_account:
         yield mock_build_gmail_account
@@ -420,7 +413,8 @@ def test_handle_report_update_outlook_message():
         summary=[],
         content=report_model.ReportContent(
             content_sources=[],
-            gmail=None
+            gmail=None,
+            outlook=None
         )
     )
     with get_session(write=True) as session:
