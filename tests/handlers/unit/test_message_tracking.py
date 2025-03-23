@@ -15,7 +15,7 @@ from biz.service.db import get_session
 from biz.utils.env import RuntimeEnv
 
 from tests import generate_random_string, generate_random_gmail, generate_random_outlook_email
-from .conftest import client, new_user, new_user_gmail_account
+from .conftest import client, new_user, new_user_gmail_account, db_add_new_account
 
 
 @pytest.fixture
@@ -23,13 +23,7 @@ def new_user_gmail_tracking_record():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Google, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
-
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
         record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
             "some_info_key": "some_info_value"
         })
@@ -38,18 +32,13 @@ def new_user_gmail_tracking_record():
         make_transient(user), make_transient(account), make_transient(record)
     return user, account, record
 
+
 @pytest.fixture
 def new_user_outlook_tracking_record():
     email = generate_random_outlook_email(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Microsoft, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
-
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Microsoft)
         record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
             "subscription_id": str(uuid.uuid4()),
         })
@@ -57,6 +46,7 @@ def new_user_outlook_tracking_record():
 
         make_transient(user), make_transient(account), make_transient(record)
     return user, account, record
+
 
 @pytest.fixture(scope="module")
 def patch_gmail_watch_stop():
@@ -79,6 +69,7 @@ def patch_gmail_watch_stop():
 @pytest.fixture(scope="module")
 def patch_outlook_subscription_create_delete():
     mock_outlook_client = MagicMock()
+
     async def create_sub(*args):
         sub = Subscription(id=str(uuid.uuid4()))
         return sub
@@ -87,7 +78,7 @@ def patch_outlook_subscription_create_delete():
         return None
 
     mock_outlook_client.subscriptions.post = create_sub
-    mock_outlook_client.subscriptions.by_subscription_id.delete = delete_sub
+    mock_outlook_client.subscriptions.return_value.by_subscription_id.return_value.delete = delete_sub
 
     mock_credential = MagicMock()
     mock_credential.access_token = generate_random_string(10)
@@ -98,10 +89,13 @@ def patch_outlook_subscription_create_delete():
                return_value=(mock_outlook_client, mock_credential)) as mock_build_microsoft_graph:
         yield mock_build_microsoft_graph
 
+
 @pytest.fixture(scope="module")
 def patch_outlook_sub_public_key():
-    with patch('biz.controller.message_tracking.get_outlook_sub_public_b64', return_value="public-key") as mock_public_key:
+    with patch('biz.controller.message_tracking.get_outlook_sub_public_b64',
+               return_value="public-key") as mock_public_key:
         yield mock_public_key
+
 
 class TestMessageTrackingGetStatus:
     def test_success(self, client, new_user_gmail_tracking_record):

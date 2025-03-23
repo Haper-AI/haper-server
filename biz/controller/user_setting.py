@@ -1,4 +1,4 @@
-from datetime import datetime
+import asyncio
 from typing import List
 
 from sqlalchemy.orm import make_transient
@@ -47,6 +47,7 @@ def update_user_setting(user_id: str, key_message_tags: List[str]):
     user_setting.key_message_tags = key_message_tags
     return user_setting
 
+
 def delete_user(user_id: str):
     with get_session(write=True) as session:
         # end all message tracking for user
@@ -55,22 +56,23 @@ def delete_user(user_id: str):
             account = Account.get_by_id(session, t.account_id)
             try:
                 if account.provider == AccountProvider.Google:
-                    gmail_api_client, credential = build_gmail_client(
+                    gmail_api_client, _ = build_gmail_client(
                         account.access_token,
                         account.refresh_token,
                         account.expires_at
                     )
 
                     gmail_api_client.users().stop(userId='me').execute()
-                if account.provider == "microsoft":
-                    msgraph_api_client, credential = build_microsoft_graph_client(
+                elif account.provider == AccountProvider.Microsoft:
+                    msgraph_api_client, _ = build_microsoft_graph_client(
                         account.access_token,
                         account.refresh_token,
                         account.expires_at
                     )
-                    msgraph_api_client.subscriptions().by_subscription_id(
-                        t.extra_info["subscription_id"]).delete()
-                    pass
+                    asyncio.run(msgraph_api_client.subscriptions().by_subscription_id(
+                        t.extra_info["subscription_id"]).delete())
+
+                MessageTrackingRecord.update(session, t.user_id, t.account_id, status=MessageTrackingStatus.STOPPED)
             except Exception as e:
                 logger.error("error happened when stop messaging: {}".format(str(e)))
 

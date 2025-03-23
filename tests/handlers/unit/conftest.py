@@ -17,6 +17,7 @@ app, client, runner = new_handler_test_conf(
     sqs_queue_name="test-unit-async-action",
 )
 
+
 @pytest.fixture
 def new_user():
     email = generate_random_gmail(8)
@@ -27,19 +28,21 @@ def new_user():
     return user
 
 
-def _new_account(session, user_id, email, provider: str):
-    account = Account.add(session, user_id, provider, generate_random_string(16),
-                          "access_token", "refresh_token",
-                          expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-                          email=email)
+def db_add_new_account(session, user_id, email, provider: str):
+    account = Account.add(
+        session, user_id, provider, generate_random_string(16),
+        "access_token", "refresh_token",
+        expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
+        email=email)
     return account
+
 
 @pytest.fixture
 def new_user_gmail_account():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = _new_account(session, user.id, email, AccountProvider.Google)
+        account = db_add_new_account(session, user.id, email, AccountProvider.Google)
         make_transient(user), make_transient(account)
 
     return user, account
@@ -50,7 +53,7 @@ def new_user_outlook_account():
     email = generate_random_outlook_email(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = _new_account(session, user.id, email, AccountProvider.Microsoft)
+        account = db_add_new_account(session, user.id, email, AccountProvider.Microsoft)
         make_transient(user), make_transient(account)
 
     return user, account

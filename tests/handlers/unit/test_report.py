@@ -22,6 +22,7 @@ from biz.utils.env import RuntimeEnv
 from biz.model.report import action_log as action_log_model
 
 from tests import generate_random_gmail, generate_random_string
+from tests.handlers.unit.conftest import db_add_new_account
 
 
 @pytest.fixture
@@ -29,12 +30,7 @@ def new_user_empty_report():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Google, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
         report = Report.add(session, user.id, {})
         make_transient(user), make_transient(account), make_transient(report)
     return user, account, report
@@ -45,12 +41,7 @@ def new_user_report():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Google, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
         report_obj = report_model.Report(
             messages_in_queue={},
             summary=[
@@ -139,12 +130,7 @@ def new_user_report_with_done_action():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Google, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
         report_obj = report_model.Report(
             messages_in_queue={},
             summary=[
@@ -206,12 +192,7 @@ def new_user_report_with_reply_action_and_no_reply_message():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Google, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
         report_obj = report_model.Report(
             messages_in_queue={},
             summary=[
@@ -269,12 +250,7 @@ def new_user_report_with_messages_in_queue():
     email = generate_random_gmail(8)
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
-        account = Account.add(
-            session, user.id, AccountProvider.Google, generate_random_string(16),
-            "access_token", "refresh_token",
-            expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
-            email=email
-        )
+        account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
         report_obj = report_model.Report(
             messages_in_queue={
                 "gmail": 4

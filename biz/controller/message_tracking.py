@@ -254,7 +254,7 @@ def end_message_tracking(user_id: str, account_id: str):
                     credential.token,
                     expires_at=int(credential.expiry.timestamp())
                 )
-        elif account.provider != AccountProvider.Microsoft:
+        elif account.provider == AccountProvider.Microsoft:
             msgraph_api_client, credential = build_microsoft_graph_client(
                 account.access_token,
                 account.refresh_token,
