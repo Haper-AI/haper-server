@@ -5,6 +5,12 @@ from datetime import datetime
 
 from googleapiclient.errors import HttpError
 from kiota_abstractions.api_error import APIError
+from msgraph.generated.models.body_type import BodyType
+from msgraph.generated.models.email_address import EmailAddress
+from msgraph.generated.models.item_body import ItemBody
+from msgraph.generated.models.message import Message
+from msgraph.generated.models.recipient import Recipient
+from msgraph.generated.users.item.messages.item.reply.reply_post_request_body import ReplyPostRequestBody
 
 from biz.controller import report_update as report_update_ctrl
 from biz.controller.gmail_util import RawGmailInfo
@@ -18,7 +24,7 @@ from biz.model.report.report_batch_action_message import ReportBatchActionMessag
 from biz.model.report.report_update_message import ReportUpdateMessage
 from biz.service.db import get_session, init_db
 from biz.service.aws.sqs import get_sqs_client, init_sqs
-from biz.utils import track_haper_error
+from biz.utils import track_haper_error, split_email_str
 from biz.utils.env import RuntimeEnv
 from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
@@ -115,6 +121,7 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
         report_obj = report_model.report_from_dict(report.content)
         ReportBatchAction.update(session, the_message.run_id, BatchActionRunStatus.Ongoing)
 
+    # TODO: remove redundant code
     if report_obj.content.gmail:
         # apply gmail actions
         for messages_by_account in report_obj.content.gmail:
@@ -130,11 +137,10 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                 )
 
                 for gmail_item in messages_by_account.messages:
+                    if gmail_item.action_result == MessageActionResult.Success:
+                        # skip for already success action
+                        continue
                     try:
-                        if gmail_item.action_result == MessageActionResult.Success:
-                            # skip for already success action
-                            continue
-
                         if gmail_item.action == MessageAction.Read:
                             gmail_api_client.users().messages().modify(
                                 userId='me',
@@ -172,7 +178,7 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                         log_to_add = action_log_model.ActionLog(
                             at=int(datetime.now().timestamp()),
                             id=gmail_item.id,
-                            message=f"{gmail_item.action} {gmail_item.sender} failed",
+                            message=f"{gmail_item.action} {gmail_item.sender} succeed",
                         ).to_dict()
 
                     except Exception as e:
@@ -190,6 +196,83 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                                 log_to_add,
                             ])
                             if gmail_item.action_result == MessageActionResult.Success:
+                                ReportBatchAction.increase_success_actions(session, the_message.report_id)
+                            else:
+                                ReportBatchAction.increase_failed_actions(session, the_message.report_id)
+                            # update content
+                            Report.update_content_subfield(session, the_message.report_id, "content",
+                                                           report_obj.content.to_dict())
+
+    if report_obj.content.outlook:
+        for messages_by_account in report_obj.content.outlook:
+            if messages_by_account.messages:
+                # get account
+                with get_session(write=False) as session:
+                    account = Account.get_by_id(session, messages_by_account.account_id)
+
+                msgraph_api_client, credential = build_microsoft_graph_client(
+                    account.access_token,
+                    account.refresh_token,
+                    account.expires_at
+                )
+
+                for outlook_item in messages_by_account.messages:
+                    if gmail_item.action_result == MessageActionResult.Success:
+                        # skip for already success action
+                        continue
+                    try:
+                        if outlook_item.action == MessageAction.Read:
+                            req_body = Message(
+                                is_read=True,
+                            )
+                            asyncio.run(
+                                msgraph_api_client.me.messages.by_message_id(outlook_item.message_id).patch(req_body))
+
+                        if outlook_item.action == MessageAction.Delete:
+                            asyncio.run(msgraph_api_client.me.messages.by_message_id(outlook_item.message_id).delete())
+                        if outlook_item.action == MessageAction.Reply:
+                            recipient_name, recipient_address = split_email_str(outlook_item.sender)
+                            req_body = ReplyPostRequestBody(
+                                message=Message(
+                                    to_recipients=[
+                                        Recipient(
+                                            email_address=EmailAddress(
+                                                name=recipient_name,
+                                                address=recipient_address,
+                                            )
+                                        )
+                                    ],
+                                    body=ItemBody(
+                                        content_type=BodyType.Text,
+                                        content=outlook_item.reply_message,
+                                    )
+                                )
+                            )
+                            asyncio.run(
+                                msgraph_api_client.me.messages.by_message_id(outlook_item.message_id).reply.post(
+                                    req_body))
+
+                        outlook_item.action_result = MessageActionResult.Success
+                        log_to_add = action_log_model.ActionLog(
+                            at=int(datetime.now().timestamp()),
+                            id=outlook_item.id,
+                            message=f"{outlook_item.action} {outlook_item.sender} succeed",
+                        ).to_dict()
+                    except Exception as e:
+                        logger.error(e)
+                        outlook_item.action_result = MessageActionResult.Error
+                        log_to_add = action_log_model.ActionLog(
+                            at=int(datetime.now().timestamp()),
+                            id=outlook_item.id,
+                            message=f"{outlook_item.action} {outlook_item.sender} failed",
+                        ).to_dict()
+                    finally:
+                        with get_session(write=True) as session:
+                            # insert action log
+                            ReportBatchAction.append_logs(session, the_message.run_id, [
+                                log_to_add,
+                            ])
+                            if outlook_item.action_result == MessageActionResult.Success:
                                 ReportBatchAction.increase_success_actions(session, the_message.report_id)
                             else:
                                 ReportBatchAction.increase_failed_actions(session, the_message.report_id)

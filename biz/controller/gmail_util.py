@@ -3,6 +3,8 @@ import re
 from datetime import datetime, timezone
 from email.utils import parsedate_tz, mktime_tz
 
+from biz.utils import split_email_str
+
 
 class RawGmailInfo:
     def __init__(self, message_id: str, thread_id: str, raw_email: dict):
@@ -16,7 +18,7 @@ class GmailInfo:
     snippet: str
     mime_type: str
     receive_at: datetime
-    sender: str # sender that contains name and email in the form of "{sender_name} <{sender_email}>"
+    sender: str  # sender that contains name and email in the form of "{sender_name} <{sender_email}>"
     sender_name: str
     sender_email: str
     to: str
@@ -43,10 +45,9 @@ def extract_gmail_info(email_info: dict):
             extracted_gmail_info.receive_at = datetime.fromtimestamp(mktime_tz(parsed_time), timezone.utc)
         elif header["name"] == "From":
             extracted_gmail_info.sender = header["value"]
-            match = re.match(r"(.+?)\s*<(.+?)>", header['value'])
-            if match:
-                extracted_gmail_info.sender_name = match.group(1).strip()
-                extracted_gmail_info.sender_email = match.group(2).strip()
+            sender_name, sender_email = split_email_str(header["value"])
+            extracted_gmail_info.sender_name = sender_name
+            extracted_gmail_info.sender_email = sender_email
         elif header["name"] == "To":
             extracted_gmail_info.to = header["value"]
         elif header["name"] == "Subject":

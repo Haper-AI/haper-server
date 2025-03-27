@@ -63,7 +63,7 @@ class MailMessageItem:
     message_id: str
     receive_at: datetime
     reply_message: Optional[str]
-    sender: str
+    sender: str # the sender will be in the format of "name <mail-address>", TODO: add verification
     subject: str
     summary: str
     tags: List[str]

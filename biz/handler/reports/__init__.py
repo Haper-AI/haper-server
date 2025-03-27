@@ -165,7 +165,6 @@ def report_batch_action(report_id: str):
 
 
 class BatchActionStatusInfos:
-
     def __init__(self, total: int, succeed: int, failed: int, logs: List[dict], status: BatchActionRunStatus):
         self.total = total
         self.succeed = succeed
@@ -179,6 +178,7 @@ class BatchActionStatusInfos:
             "succeed": self.succeed,
             "failed": self.failed,
             "status": self.status,
+            "logs": self.logs,
         }
 
 
