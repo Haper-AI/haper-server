@@ -31,12 +31,14 @@ def list_user_message_tracking_status(user_id: str):
                 if account.id not in message_tracking_status_by_account:
                     result.append({
                         'account_id': account.id,
+                        'email': account.email,
                         'provider': account.provider,
                         'status': MessageTrackingStatus.NOT_STARTED,
                     })
                 else:
                     result.append({
                         'account_id': account.id,
+                        'email': account.email,
                         'provider': account.provider,
                         'status': message_tracking_status_by_account[account.id].status,
                         'created_at': message_tracking_status_by_account[account.id].created_at,
@@ -159,6 +161,7 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
 
     return {
         "account_id": account.id,
+        "email": account.email,
         "provider": account.provider,
         "status": tracking_record.status,
         "created_at": tracking_record.created_at,
@@ -209,6 +212,7 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
 
     return {
         "account_id": account.id,
+        "email": account.email,
         "provider": account.provider,
         "status": tracking_record.status,
         "created_at": tracking_record.created_at,
@@ -276,6 +280,7 @@ def end_message_tracking(user_id: str, account_id: str):
 
     return {
         "account_id": account.id,
+        "email": account.email,
         "provider": account.provider,
         "status": tracking_record.status,
         "created_at": tracking_record.created_at,
