@@ -52,7 +52,7 @@ def jwt_auth(f):
         resp = HTTPResponse(request.method, request.path)
         token = request.cookies.get(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME)
         if not token:
-            resp.set_error(ResponseCode.InvalidAuth.create_error('No token found'))
+            resp.set_error(ResponseCode.InvalidAuth.create_error('No user token found'))
             return resp.return_with_log()
 
         try:

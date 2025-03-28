@@ -1,3 +1,4 @@
+import uuid
 from typing import Optional
 
 from flask import Blueprint, request
@@ -39,7 +40,7 @@ class StartMessageTrackingReq(BaseModel):
 
             return self
 
-    account_id: Optional[str] = None
+    account_id: Optional[uuid.UUID] = None
     account: Optional[_Account] = None
 
     @model_validator(mode='after')
@@ -75,7 +76,7 @@ def start_message_tracking():
 
 
 class EndMessageTrackingReq(BaseModel):
-    account_id: str
+    account_id: uuid.UUID
 
 
 @tracking_routes.route("/stop", methods=["POST"])

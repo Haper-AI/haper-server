@@ -196,8 +196,8 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
             )
             extra_info['expiration'] = expiration
             extra_info['pre_history_id'] = history_id
-        elif provider != AccountProvider.Microsoft:
-            subscription_id, expiration, credential = watch_gmail(
+        elif provider == AccountProvider.Microsoft:
+            subscription_id, expiration, credential = watch_outlook(
                 account.access_token,
                 account.refresh_token,
                 account.expires_at
