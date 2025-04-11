@@ -4,17 +4,19 @@ import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from email.utils import formatdate
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 from sqlalchemy.orm import make_transient
 
+from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.user import AccountProvider
 from biz.dal.email import Email
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, BatchActionRunStatus
 from biz.dal.user import User, Account
 from biz.handler.middleware import gen_jwt_auth
+from biz.model import ReportMessagesInQueueFieldName
 from biz.service.db import get_session
 from biz.model.report import report as report_model
 from biz.model.report import rich_text as rich_text_model
@@ -309,23 +311,14 @@ class TestGenerateReport:
             user, _, report = new_user_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
-            # first request
-            response = client.post("/api/v1/report/generate")
-            assert response.status_code == 200
+            for _ in range(10):
+                response = client.post("/api/v1/report/generate")
+                assert response.status_code == 200
 
-            with get_session(write=True) as session:
-                new_report = Report.get_latest_by_user_id(session, user.id)
-                Report.delete(session, new_report.id)
-                Report.update(session, report.id, status=ReportStatus.Appending)
-
-            # second request
-            response = client.post("/api/v1/report/generate")
-            assert response.status_code == 200
-
-            with get_session(write=True) as session:
-                new_report = Report.get_latest_by_user_id(session, user.id)
-                Report.delete(session, new_report.id)
-                Report.update(session, report.id, status=ReportStatus.Appending)
+                with get_session(write=True) as session:
+                    new_report = Report.get_latest_by_user_id(session, user.id)
+                    Report.delete(session, new_report.id)
+                    Report.update(session, report.id, status=ReportStatus.Appending)
 
             # third request
             response = client.post("/api/v1/report/generate")
@@ -369,9 +362,9 @@ class TestPollMessageProcessingStatus:
         def test_success_with_messages_in_queue(self, client, new_user_report_with_messages_in_queue):
             user, _, report = new_user_report_with_messages_in_queue
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.get("/api/v1/report/{}/message-processing-status".format(report.id))
+            response = client.post("/api/v1/report/{}/message-processing-status".format(report.id))
             with get_session(write=True) as session:
-                Report.update_content_subfield(session, report.id, "messages_in_queue", {"gmail": 0})
+                Report.update_content_subfield(session, report.id, ReportMessagesInQueueFieldName, {"gmail": 0})
             assert response.status_code == 200
             assert 'text/event-stream' in response.headers['Content-Type']
             assert response.data
@@ -379,7 +372,7 @@ class TestPollMessageProcessingStatus:
         def test_success_without_messages_in_queue(self, client, new_user_empty_report):
             user, _, report = new_user_empty_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.get("/api/v1/report/{}/message-processing-status".format(report.id))
+            response = client.post("/api/v1/report/{}/message-processing-status".format(report.id))
             assert response.status_code == 200
             assert 'text/event-stream' in response.headers['Content-Type']
             assert response.data
@@ -388,13 +381,13 @@ class TestPollMessageProcessingStatus:
         def test_fail_with_invalid_auth(self, client, new_user_empty_report):
             user, _, report = new_user_empty_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
-            response = client.get("/api/v1/report/{}/message-processing-status".format(report.id))
+            response = client.post("/api/v1/report/{}/message-processing-status".format(report.id))
             assert response.status_code == 400
 
         def test_fail_with_non_exist_report(self, client, new_user_empty_report):
             user, _, report = new_user_empty_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.get("/api/v1/report/{}/message-processing-status".format(str(uuid.uuid4())))
+            response = client.post("/api/v1/report/{}/message-processing-status".format(str(uuid.uuid4())))
             assert response.status_code == 404
 
 
@@ -452,6 +445,10 @@ class TestUpdateReport:
                         "id": 1,
                         "action": MessageAction.Delete,
                         "category": MessageCategory.NonEssential,
+                    },
+                    {
+                        "id": 2,
+                        "category": MessageCategory.Essential,
                     }
                 ]
             }
@@ -666,7 +663,7 @@ class TestPollReportRunStatus:
             make_transient(run)
 
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-        response = client.get("/api/v1/report/{}/batch-action-status".format(report.id))
+        response = client.post("/api/v1/report/{}/batch-action-status".format(report.id))
         assert response.status_code == 200
         assert 'text/event-stream' in response.headers['Content-Type']
 
@@ -685,17 +682,17 @@ class TestPollReportRunStatus:
 
         assert response.data
 
+    def test_success_with_no_run_info(self, client, new_user_report):
+        user, _, report = new_user_report
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        response = client.post("/api/v1/report/{}/batch-action-status".format(report.id))
+        assert response.status_code == 200
+
     class TestFail:
         def test_fail_with_invalid_auth(self, client, new_user_report):
             user, _, report = new_user_report
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
-            response = client.get("/api/v1/report/{}/batch-action-status".format(report.id))
-            assert response.status_code == 400
-
-        def test_fail_with_no_run_info(self, client, new_user_report):
-            user, _, report = new_user_report
-            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.get("/api/v1/report/{}/batch-action-status".format(report.id))
+            response = client.post("/api/v1/report/{}/batch-action-status".format(report.id))
             assert response.status_code == 400
 
 
@@ -742,9 +739,11 @@ def patch_gmail_get_message():
     mock_credential = MagicMock()
     mock_credential.token = generate_random_string(10)
     mock_credential.expiry = datetime.now() + timedelta(hours=2)
-    with patch('biz.controller.report.build_gmail_client',
-               return_value=(mock_gmail_client, mock_credential)) as mock_build_gmail_account:
-        yield mock_build_gmail_account
+    with patch.object(GmailAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(GmailAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            p1.return_value = mock_gmail_client
+            p2.return_value = mock_credential
+            yield p1, p2
 
 
 @pytest.fixture(scope="module")
@@ -753,7 +752,9 @@ def patch_langchain_chat_model():
 
     def chat_model_streaming(*args):
         for i in range(10):
-            yield "message-{}".format(i)
+            tmp = MagicMock()
+            tmp.content = "message-{}".format(i)
+            yield tmp
             time.sleep(0.4)
 
     mock_chat_model.stream.side_effect = chat_model_streaming

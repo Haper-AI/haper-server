@@ -4,6 +4,7 @@ import hmac
 import json
 from datetime import timedelta, datetime
 
+import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
@@ -11,46 +12,54 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.padding import PKCS7
 
+from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord
 from biz.dal.report import Report
 from biz.service.db import get_session
 from tests import generate_random_string, generate_random_gmail
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 
 from tests.handlers.unit.conftest import create_rsa_pairs
 
+@pytest.fixture(scope="module")
+def patch_gmail_api():
+    # configure mock gmail client api
+    mock_gmail_client = MagicMock()
+    mock_gmail_client.users().history().list.return_value.execute.return_value = {
+        'history': [
+            {
+                'messagesAdded': [
+                    {
+                        'message': {
+                            'id': 'test_message_id',
+                            'threadId': 'test_message_id',
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+    mock_credential = MagicMock()
+    mock_credential.token = generate_random_string(10)
+    mock_credential.expiry = datetime.now() + timedelta(hours=2)
+
+    with patch.object(GmailAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(GmailAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            p1.return_value = mock_gmail_client
+            p2.return_value = mock_credential
+            yield p1, p2
 
 class TestGmailSyncWebhook:
-    @patch('biz.controller.message_sync.build_gmail_client')
-    def test_success(self, mock_build_gmail_client, client, new_user_gmail_account):
+    @pytest.mark.usefixtures("patch_gmail_api")
+    def test_success(self, client, new_user_gmail_account):
         user, account = new_user_gmail_account
         with get_session(write=True) as session:
             MessageTrackingRecord.add(session, user.id, account.id, extra_info={
                 "pre_history_id": "some_history_id",
+                "expiration": int((datetime.now() + timedelta(days=7)).timestamp()),
             })
             Report.add(session, user.id, {})
 
-        # configure mock gmail client api
-        mock_gmail_client = MagicMock()
-        mock_gmail_client.users().history().list.return_value.execute.return_value = {
-            'history': [
-                {
-                    'messagesAdded': [
-                        {
-                            'message': {
-                                'id': 'test_message_id',
-                                'threadId': 'test_message_id',
-                            }
-                        }
-                    ]
-                }
-            ]
-        }
-        mock_credential = MagicMock()
-        mock_credential.token = generate_random_string(10)
-        mock_credential.expiry = datetime.now() + timedelta(hours=2)
-
-        mock_build_gmail_client.return_value = (mock_gmail_client, mock_credential)
 
         response = client.post('/api/v1/webhook/gmail-sync', json={
             'message': {
@@ -90,7 +99,10 @@ class TestOutlookSyncWebhook:
         def test_success_with_data(self, client, new_user_outlook_account):
             user, account = new_user_outlook_account
             with get_session(write=True) as session:
-                MessageTrackingRecord.add(session, user.id, account.id)
+                MessageTrackingRecord.add(session, user.id, account.id, extra_info={
+                    "subscription_id": "some_subscription_id",
+                    "expiration": int((datetime.now() + timedelta(days=7)).timestamp()),
+                })
                 Report.add(session, user.id, {})
 
             private_key_str, public_key_str = create_rsa_pairs()

@@ -30,12 +30,14 @@ def get_engine():
 @contextmanager
 def get_session(write: bool = False):
     session = _session_factory()  # Create a session
+    if write:
+        session.begin()
     try:
         yield session  # Yield the session for use
         if write:
             session.commit()
         session.close()  # Close the session after use
     except Exception as e:
-        if write:
-            session.rollback()
+        session.rollback()
+        session.close()
         raise e

@@ -88,7 +88,7 @@ class User(Base):
         :param user_id: UUID of the user to fetch
         :return: User object or None if not found
         """
-        return session.query(cls).filter(cls.id == user_id).first()
+        return session.query(cls).filter_by(id=user_id).first()
 
     @classmethod
     def get_by_email(cls, session: Session, email: str):
@@ -99,7 +99,7 @@ class User(Base):
         :param email: UUID of the user to fetch
         :return: User object or None if not found
         """
-        return session.query(cls).filter(cls.email == email).first()
+        return session.query(cls).filter_by(email=email).first()
 
     @classmethod
     def mark_deleted(cls, session: Session, user_id: Union[str, UUID]):

@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 from sqlalchemy.orm import make_transient
 
 from app.consumer_main import handle_report_batch_action
+from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.user import AccountProvider
 from biz.dal.report import MessageAction, MessageCategory, Report, ReportStatus
 from biz.dal.report_batch_action import ReportBatchAction
@@ -27,9 +28,11 @@ def patch_gmail_api():
     mock_credential.token = generate_random_string(10)
     mock_credential.expiry = datetime.now() + timedelta(hours=2)
 
-    with patch('app.consumer_main.build_gmail_client',
-               return_value=(mock_gmail_client, mock_credential)) as mock_build_gmail_account:
-        yield mock_build_gmail_account
+    with patch.object(GmailAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(GmailAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            p1.return_value = mock_gmail_client
+            p2.return_value = mock_credential
+            yield p1, p2
 
 
 @pytest.fixture

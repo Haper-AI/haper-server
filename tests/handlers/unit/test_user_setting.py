@@ -1,9 +1,11 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 from sqlalchemy.orm import make_transient
 
+from biz.controller.gmail_util import GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord
 from biz.dal.report import Report
 from biz.dal.user import User, AccountProvider
@@ -104,14 +106,15 @@ def mock_gmail_and_outlook():
     async def delete_sub():
         return None
 
-    mock_outlook = MagicMock()
-    mock_outlook.subscriptions.by_subscription_id.return_value.delete = delete_sub
+    mock_outlook_client = MagicMock()
+    mock_outlook_client.subscriptions.by_subscription_id.return_value.delete = delete_sub
 
-    with patch('biz.controller.user_setting.build_gmail_client',
-               return_value=(MagicMock(), None)) as mock_gmail_client:
-        with patch('biz.controller.user_setting.build_microsoft_graph_client',
-                   return_value=(mock_outlook, None)) as mock_outlook_client:
-            yield mock_gmail_client, mock_outlook_client
+    with patch.object(GmailAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(GmailAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            with patch.object(OutlookAPIClient, "client", create=True, new_callable=PropertyMock) as p3:
+                with patch.object(OutlookAPIClient, "credential", create=True, new_callable=PropertyMock) as p4:
+                    p3.return_value = mock_outlook_client
+                    yield p1, p2, p3, p4
 
 
 class TestDeleteUserSetting:
@@ -132,7 +135,7 @@ class TestDeleteUserSetting:
             make_transient(user)
 
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-        response = client.delete("/api/v1/user", json={"key_message_tags": []})
+        response = client.delete("/api/v1/user")
         assert response.status_code == 200
         with get_session(write=False) as session:
             user = User.get_by_id(session, user.id)

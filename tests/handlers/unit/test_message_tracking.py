@@ -1,11 +1,13 @@
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 from msgraph.generated.models.subscription import Subscription
 from sqlalchemy.orm import make_transient
 
+from biz.controller.gmail_util import GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
 from biz.dal.report import Report
@@ -61,9 +63,11 @@ def patch_gmail_watch_stop():
     mock_credential = MagicMock()
     mock_credential.token = generate_random_string(10)
     mock_credential.expiry = datetime.now() + timedelta(hours=2)
-    with patch('biz.controller.message_tracking.build_gmail_client',
-               return_value=(mock_gmail_client, mock_credential)) as mock_build_gmail_account:
-        yield mock_build_gmail_account
+    with patch.object(GmailAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(GmailAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            p1.return_value = mock_gmail_client
+            p2.return_value = mock_credential
+            yield p1, p2
 
 
 @pytest.fixture(scope="module")
@@ -83,16 +87,18 @@ def patch_outlook_subscription_create_delete():
     mock_credential = MagicMock()
     mock_credential.access_token = generate_random_string(10)
     mock_credential.refresh_token = generate_random_string(10)
-    mock_credential.expiry = int((datetime.now() + timedelta(hours=2)).timestamp())
+    mock_credential.expires_at = int((datetime.now() + timedelta(hours=2)).timestamp())
 
-    with patch('biz.controller.message_tracking.build_microsoft_graph_client',
-               return_value=(mock_outlook_client, mock_credential)) as mock_build_microsoft_graph:
-        yield mock_build_microsoft_graph
+    with patch.object(OutlookAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(OutlookAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            p1.return_value = mock_outlook_client
+            p2.return_value = mock_credential
+            yield p1, p2
 
 
 @pytest.fixture(scope="module")
 def patch_outlook_sub_public_key():
-    with patch('biz.controller.message_tracking.get_outlook_sub_public_b64',
+    with patch('biz.controller.outlook_util.get_outlook_sub_public_b64',
                return_value="public-key") as mock_public_key:
         yield mock_public_key
 

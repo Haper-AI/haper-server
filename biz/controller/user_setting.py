@@ -1,17 +1,16 @@
-import asyncio
 from typing import List
 
 from sqlalchemy.orm import make_transient
 
+from biz.controller.gmail_util import GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.controller.report import end_reporting_sequence
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingStatus, MessageTrackingRecord
 from biz.dal.user import Account, User
 from biz.dal.user_setting import UserSetting
 from biz.service.db import get_session
-from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
-from biz.utils.microsoft import build_microsoft_graph_client
 from biz.utils.response import ResponseCode
 
 
@@ -56,21 +55,20 @@ def delete_user(user_id: str):
             account = Account.get_by_id(session, t.account_id)
             try:
                 if account.provider == AccountProvider.Google:
-                    gmail_api_client, _ = build_gmail_client(
+                    gmail_api_client = GmailAPIClient(
                         account.access_token,
                         account.refresh_token,
                         account.expires_at
                     )
 
-                    gmail_api_client.users().stop(userId='me').execute()
+                    gmail_api_client.stop_watch()
                 elif account.provider == AccountProvider.Microsoft:
-                    msgraph_api_client, _ = build_microsoft_graph_client(
+                    msgraph_api_client = OutlookAPIClient(
                         account.access_token,
                         account.refresh_token,
                         account.expires_at
                     )
-                    asyncio.run(msgraph_api_client.subscriptions.by_subscription_id(
-                        t.extra_info["subscription_id"]).delete())
+                    msgraph_api_client.stop_watch_outlook(t.extra_info["subscription_id"])
 
                 MessageTrackingRecord.update(session, t.user_id, t.account_id, status=MessageTrackingStatus.STOPPED)
             except Exception as e:

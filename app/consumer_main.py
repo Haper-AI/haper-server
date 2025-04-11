@@ -1,19 +1,12 @@
-import asyncio
-import base64
 import json
 from datetime import datetime
 
 from googleapiclient.errors import HttpError
 from kiota_abstractions.api_error import APIError
-from msgraph.generated.models.body_type import BodyType
-from msgraph.generated.models.email_address import EmailAddress
-from msgraph.generated.models.item_body import ItemBody
-from msgraph.generated.models.message import Message
-from msgraph.generated.models.recipient import Recipient
-from msgraph.generated.users.item.messages.item.reply.reply_post_request_body import ReplyPostRequestBody
 
 from biz.controller import report_update as report_update_ctrl
-from biz.controller.gmail_util import RawGmailInfo
+from biz.controller.gmail_util import RawGmailInfo, GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.report import Report, MessageAction
 from biz.dal.report_batch_action import MessageActionResult, ReportBatchAction, BatchActionRunStatus
 from biz.dal.user import Account
@@ -26,9 +19,7 @@ from biz.service.db import get_session, init_db
 from biz.service.aws.sqs import get_sqs_client, init_sqs
 from biz.utils import track_haper_error, split_email_str
 from biz.utils.env import RuntimeEnv
-from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
-from biz.utils.microsoft import build_microsoft_graph_client
 
 
 def handle_report_update(the_message: ReportUpdateMessage):
@@ -41,33 +32,27 @@ def handle_report_update(the_message: ReportUpdateMessage):
             account = Account.get_by_id(session, account_id)
 
         # use user account info to call gmail api
-        gmail_api_client, _ = build_gmail_client(
-            account.access_token,
-            account.refresh_token,
-            account.expires_at
-        )
+        gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
 
         # fetch emails
         emails = []
         for new_gmail_msg in new_gmail_messages:
             try:
-                email_info = gmail_api_client.users().messages().get(
-                    userId="me",
-                    id=new_gmail_msg.message_id,
-                ).execute()
+                email_info = gmail_api_client.get_email(new_gmail_msg.message_id)
                 emails.append(RawGmailInfo(new_gmail_msg.message_id, new_gmail_msg.thread_id, email_info))
             except HttpError as e:
                 if e.resp.status == 404:
                     logger.warning(f"Gmail not found: {new_gmail_msg.message_id}")
                     continue
 
-        # use llm process email info
+        # use llm process found email info
         report_update_ctrl.update_report_with_gmail_message(
             the_message.user_id,
             str(account_id),
             account.email,
             the_message.report_id,
             emails,
+            len(new_gmail_messages)
         )
     elif the_message.messages.outlook:
         account_id = the_message.messages.outlook.account_id
@@ -78,7 +63,7 @@ def handle_report_update(the_message: ReportUpdateMessage):
             account = Account.get_by_id(session, account_id)
 
         # use user account info to call outlook api
-        msgraph_api_client, credential = build_microsoft_graph_client(
+        outlook_api_client = OutlookAPIClient(
             account.access_token,
             account.refresh_token,
             account.expires_at
@@ -88,22 +73,12 @@ def handle_report_update(the_message: ReportUpdateMessage):
         emails = []
         for mail_id in new_mail_ids:
             try:
-                result = asyncio.run(msgraph_api_client.me.messages.by_message_id(mail_id).get())
+                result = outlook_api_client.get_email(mail_id)
                 emails.append(result)
             except APIError as e:
                 if e.response_status_code == 404:
                     logger.warning(f"Outlook mail not found: {mail_id}")
                     continue
-
-        if credential.access_token != account.access_token:
-            with get_session(True) as session:
-                Account.update(
-                    session,
-                    account.id,
-                    credential.access_token,
-                    refresh_token=credential.refresh_token,
-                    expires_at=credential.expiry,
-                )
 
         # use llm process email info
         report_update_ctrl.update_report_with_outlook_emails(
@@ -112,6 +87,7 @@ def handle_report_update(the_message: ReportUpdateMessage):
             account.email,
             the_message.report_id,
             emails,
+            len(new_mail_ids)
         )
 
 
@@ -130,11 +106,7 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                 with get_session(write=False) as session:
                     account = Account.get_by_id(session, messages_by_account.account_id)
 
-                gmail_api_client, credential = build_gmail_client(
-                    account.access_token,
-                    account.refresh_token,
-                    account.expires_at
-                )
+                gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
 
                 for gmail_item in messages_by_account.messages:
                     if gmail_item.action_result == MessageActionResult.Success:
@@ -142,36 +114,14 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                         continue
                     try:
                         if gmail_item.action == MessageAction.Read:
-                            gmail_api_client.users().messages().modify(
-                                userId='me',
-                                id=gmail_item.message_id,
-                                body={
-                                    'removeLabelIds': ['UNREAD'],
-                                }
-                            ).execute()
+                            gmail_api_client.read_email(gmail_item.message_id)
                         elif gmail_item.action == MessageAction.Delete:
-                            gmail_api_client.users().messages().trash(
-                                userId='me',
-                                id=gmail_item.message_id,
-                            ).execute()
+                            gmail_api_client.trash_email(gmail_item.message_id)
                         elif gmail_item.action == MessageAction.Reply:
-                            body_data = base64.urlsafe_b64encode(gmail_item.reply_message.encode("utf-8"))
-                            gmail_api_client.users().messages().send(
-                                userId='me',
-                                body={
-                                    "threadId": gmail_item.thread_id,
-                                    "payload": {
-                                        # TODO: support more type of mimeType
-                                        "mimeType": "text/plain",
-                                        "body": {
-                                            "size": len(body_data),
-                                            "data": body_data.decode("utf-8")
-                                        }
-                                    }
-                                }
-                            ).execute()
-
-                        # if gmail_item.action == MessageAction.Ignore:
+                            _, recipient_address = split_email_str(gmail_item.sender)
+                            gmail_api_client.reply_email_text(recipient_address, gmail_item.thread_id,
+                                                              gmail_item.reply_message)
+                        # elif gmail_item.action == MessageAction.Ignore:
                         # ignore
 
                         gmail_item.action_result = MessageActionResult.Success
@@ -196,9 +146,9 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                                 log_to_add,
                             ])
                             if gmail_item.action_result == MessageActionResult.Success:
-                                ReportBatchAction.increase_success_actions(session, the_message.report_id)
+                                ReportBatchAction.increase_success_actions(session, the_message.run_id)
                             else:
-                                ReportBatchAction.increase_failed_actions(session, the_message.report_id)
+                                ReportBatchAction.increase_failed_actions(session, the_message.run_id)
                             # update content
                             Report.update_content_subfield(session, the_message.report_id, "content",
                                                            report_obj.content.to_dict())
@@ -210,47 +160,28 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                 with get_session(write=False) as session:
                     account = Account.get_by_id(session, messages_by_account.account_id)
 
-                msgraph_api_client, credential = build_microsoft_graph_client(
+                outlook_api_client = OutlookAPIClient(
                     account.access_token,
                     account.refresh_token,
                     account.expires_at
                 )
 
                 for outlook_item in messages_by_account.messages:
-                    if gmail_item.action_result == MessageActionResult.Success:
+                    if outlook_item.action_result == MessageActionResult.Success:
                         # skip for already success action
                         continue
                     try:
                         if outlook_item.action == MessageAction.Read:
-                            req_body = Message(
-                                is_read=True,
-                            )
-                            asyncio.run(
-                                msgraph_api_client.me.messages.by_message_id(outlook_item.message_id).patch(req_body))
-
-                        if outlook_item.action == MessageAction.Delete:
-                            asyncio.run(msgraph_api_client.me.messages.by_message_id(outlook_item.message_id).delete())
-                        if outlook_item.action == MessageAction.Reply:
+                            outlook_api_client.read_email(outlook_item.message_id)
+                        elif outlook_item.action == MessageAction.Delete:
+                            outlook_api_client.trash_email(outlook_item.message_id)
+                        elif outlook_item.action == MessageAction.Reply:
                             recipient_name, recipient_address = split_email_str(outlook_item.sender)
-                            req_body = ReplyPostRequestBody(
-                                message=Message(
-                                    to_recipients=[
-                                        Recipient(
-                                            email_address=EmailAddress(
-                                                name=recipient_name,
-                                                address=recipient_address,
-                                            )
-                                        )
-                                    ],
-                                    body=ItemBody(
-                                        content_type=BodyType.Text,
-                                        content=outlook_item.reply_message,
-                                    )
-                                )
-                            )
-                            asyncio.run(
-                                msgraph_api_client.me.messages.by_message_id(outlook_item.message_id).reply.post(
-                                    req_body))
+                            outlook_api_client.reply_email_text(outlook_item.message_id, recipient_name,
+                                                                recipient_address, outlook_item.reply_message)
+                        # elif outlook_item.action == MessageAction.Ignore
+                        #     # Ignore
+                        #     pass
 
                         outlook_item.action_result = MessageActionResult.Success
                         log_to_add = action_log_model.ActionLog(
@@ -282,7 +213,7 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
 
     # set batch run status
     with get_session(write=True) as session:
-        ReportBatchAction.update(session, the_message.report_id, status=BatchActionRunStatus.Done)
+        ReportBatchAction.update(session, the_message.run_id, status=BatchActionRunStatus.Done)
 
 
 def init():

@@ -8,6 +8,7 @@ from pydantic import BaseModel, PositiveInt
 from biz.controller import report as report_ctrl
 from biz.dal.report_batch_action import BatchActionRunStatus
 from biz.handler.middleware import catch_error, jwt_auth
+from biz.model import ReportMessagesInQueueFieldName
 from biz.service.rate_limiter import user_limiter
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse
@@ -40,7 +41,7 @@ def get_newest_appending_report():
 @report_routes.route("/generate", methods=["POST"])
 @catch_error
 @jwt_auth
-@user_limiter.limit("2 per day")
+@user_limiter.limit("10 per day")
 def generate_report():
     resp = HTTPResponse(request.method, request.path)
     latest_report, _ = report_ctrl.generate_report(request.ctx.user_id)
@@ -123,13 +124,15 @@ def poll_message_processing_status(pre_status: dict, report_id: str):
         logger.info("Client disconnected")
 
 
-@report_routes.route("/<uuid:report_id>/message-processing-status", methods=["GET"])
+@report_routes.route("/<uuid:report_id>/message-processing-status", methods=["POST"])
+# as DigitalOcean App Platform will buffer all response and then return all data when method is GET for event-stream
+# we use post temporally to solve this problem right now
 @catch_error
 @jwt_auth
 def message_processing_status(report_id: str):
     report = report_ctrl.get_report_by_id(request.ctx.user_id, report_id)
 
-    return Response(poll_message_processing_status(report.content.get("messages_in_queue", {}), report_id),
+    return Response(poll_message_processing_status(report.content.get(ReportMessagesInQueueFieldName, {}), report_id),
                     content_type="text/event-stream")
 
 
@@ -145,6 +148,7 @@ def delete_report_by_id(report_id: str):
 @report_routes.route("/<uuid:report_id>", methods=["PUT"])
 @catch_error
 @jwt_auth
+@user_limiter.limit("4 per 1 second")
 def update_report_info(report_id: str):
     resp = HTTPResponse(request.method, request.path)
     req = report_ctrl.ReportUpdateInfo(**request.get_json())
@@ -191,19 +195,21 @@ def poll_batch_action_run_status(run_id: str, last_info: BatchActionStatusInfos)
                 run_status = report_ctrl.poll_last_batch_action(run_id)
                 if run_status.logs is None:
                     run_status.logs = []
-                updates = {}
+                has_updates = False
                 if run_status.succeed_actions != last_info.succeed:
-                    updates["succeed"] = run_status.succeed
-                    last_info.succeed = run_status.succeed
+                    has_updates = True
+                    last_info.succeed = run_status.succeed_actions
                 if run_status.failed_actions != last_info.failed:
-                    updates["failed"] = run_status.failed
-                    last_info.failed = run_status.failed
+                    has_updates = True
+                    last_info.failed = run_status.failed_actions
                 if len(run_status.logs) != len(last_info.logs):
-                    updates["logs"] = run_status.logs[len(last_info.logs):]
+                    has_updates = True
                     last_info.logs = run_status.logs
+                if run_status.status != last_info.status:
+                    last_info.status = run_status.status
 
-                if updates:
-                    yield json.dumps(updates)
+                if has_updates:
+                    yield json.dumps(last_info.to_dict())
 
                 if run_status.status == BatchActionRunStatus.Done:
                     break
@@ -211,11 +217,16 @@ def poll_batch_action_run_status(run_id: str, last_info: BatchActionStatusInfos)
             logger.info("Client disconnected")
 
 
-@report_routes.route("/<uuid:report_id>/batch-action-status", methods=["GET"])
+@report_routes.route("/<uuid:report_id>/batch-action-status", methods=["POST"])
+# as DigitalOcean App Platform will buffer all response and then return all data when method is GET for event-stream
+# we use post temporally to solve this problem right now
 @catch_error
 @jwt_auth
 def report_batch_action_status(report_id: str):
     batch_run = report_ctrl.get_latest_batch_action(request.ctx.user_id, report_id)
+    if batch_run is None:
+        resp = HTTPResponse(request.method, request.path)
+        return resp.return_with_log()
 
     return Response(poll_batch_action_run_status(str(batch_run.id), BatchActionStatusInfos(
         total=batch_run.total_actions,
@@ -235,7 +246,7 @@ class GenerateMessageReplyReq(BaseModel):
 @report_routes.route("/<uuid:report_id>/generate-reply", methods=["POST"])
 @catch_error
 @jwt_auth
-@user_limiter.limit("1 per 3 second;20 per day")
+@user_limiter.limit("1 per 3 second;100 per day")
 def generate_message_reply(report_id: str):
     req = GenerateMessageReplyReq(**request.get_json())
     streaming_reply_gen = report_ctrl.generate_message_reply(

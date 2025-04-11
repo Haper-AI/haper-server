@@ -67,6 +67,7 @@ class HTTPResponse:
         )
 
     def return_with_log(self):
+        self.elapsed = int(time.time() * 1000) - self.time
         if self.http_status == 200:
             logger.info('%s %s %d, elapsed: %dms', self.method, self.uri, self.http_status, self.elapsed)
         elif self.http_status in [400, 401]:
@@ -80,7 +81,7 @@ class HTTPResponse:
             'status': self.status,
             'message': self.message,
             'uri': self.uri,
-            'elapsed': int(time.time() * 1000 - self.time),
+            'elapsed': self.elapsed,
             'data': self.data,
         })
         for cookie in self.cookie_response.headers.getlist("Set-Cookie"):

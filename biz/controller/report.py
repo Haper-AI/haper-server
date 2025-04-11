@@ -3,23 +3,23 @@ import json
 from typing import Literal, List, Optional, Dict
 
 from googleapiclient.errors import HttpError
+from kiota_abstractions.api_error import APIError
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session, make_transient
 
-from biz.controller.gmail_util import extract_gmail_info
-from biz.controller.outlook_util import extract_outlook_info
+from biz.controller.gmail_util import extract_gmail_info, GmailAPIClient
+from biz.controller.outlook_util import extract_outlook_info, OutlookAPIClient
 from biz.dal.email import Email, EmailSource
 from biz.dal.report_batch_action import ReportBatchAction, BatchActionRunStatus, MessageActionResult
 from biz.dal.user import Account
+from biz.model import ReportMessagesInQueueFieldName
 from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.service.aws.sqs import send_report_batch_action_message
-from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
-from biz.utils.microsoft import build_microsoft_graph_client
 from biz.utils.response import ResponseCode
 from biz.model.report import report as report_model
 
@@ -48,7 +48,7 @@ def end_reporting_sequence(session: Session, user_id: str):
 def generate_report(user_id: str):
     with get_session(write=True) as session:
         latest_report = Report.get_latest_by_user_id(session, user_id, for_update=True)
-        if latest_report and not latest_report.content:
+        if not latest_report or not latest_report.content:
             raise ResponseCode.UnsupportedAction.create_error(
                 "latest report has no content, please wait for new messages")
         # finalize the report and create a new one
@@ -104,15 +104,17 @@ def delete_report_by_id(user_id: str, report_id: str):
 class ReportUpdateInfo(BaseModel):
     class InfoUpdates(BaseModel):
         id: int
-        category: Literal[MessageCategory.Essential, MessageCategory.NonEssential]
-        action: Literal[MessageAction.Read, MessageAction.Delete, MessageAction.Reply, MessageAction.Ignore]
+        category: Optional[Literal[MessageCategory.Essential, MessageCategory.NonEssential]] = None
+        action: Optional[
+            Literal[MessageAction.Read, MessageAction.Delete, MessageAction.Reply, MessageAction.Ignore]] = None
         reply_message: Optional[str] = None
 
-    gmail: Dict[str, List[InfoUpdates]]  # key: account id
+    gmail: Optional[Dict[str, List[InfoUpdates]]] = None  # key: account id
+    outlook: Optional[Dict[str, List[InfoUpdates]]] = None  # key: account id
 
     @model_validator(mode='after')
     def validate_req(self):
-        if len(self.gmail) == 0:
+        if not self.gmail and not self.outlook:
             raise ValueError("empty update info")
 
         for k, v in self.gmail.items():
@@ -142,8 +144,8 @@ def check_can_op_on_report_and_parse_content(session: Session, user_id: str, rep
         raise ResponseCode.UnsupportedAction.create_error(
             "current report has not content, please wait for new messages")
 
-    if "messages_in_queue" in report.content and report.content["messages_in_queue"]:
-        for k, v in report.content["messages_in_queue"].items():
+    if ReportMessagesInQueueFieldName in report.content and report.content[ReportMessagesInQueueFieldName]:
+        for k, v in report.content[ReportMessagesInQueueFieldName].items():
             if v > 0:
                 raise ResponseCode.UnsupportedAction.create_error(
                     "current report still has messages in queue to process, please wait for it to complete"
@@ -153,24 +155,38 @@ def check_can_op_on_report_and_parse_content(session: Session, user_id: str, rep
     return report_content_obj
 
 
-def update_report_info(user_id: str, report_id: str, update_info: ReportUpdateInfo):
+def update_report_info(user_id: str, report_id: str, all_updates: ReportUpdateInfo):
     with get_session(write=True) as session:
         report = Report.get_by_id(session, report_id, for_update=True)
 
         report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
-        # update gmail
+        # update
         ## map update_info by account_id, then by id
         mapped_update_info: Dict[str, Dict[int, ReportUpdateInfo.InfoUpdates]] = {}
-        for account_id, updates_by_account in update_info.gmail.items():
-            if account_id not in mapped_update_info:
-                mapped_update_info[account_id] = {}
-            for update_info in updates_by_account:
-                mapped_update_info[account_id][update_info.id] = update_info
+        if all_updates.gmail:
+            for account_id, updates_by_account in all_updates.gmail.items():
+                if account_id not in mapped_update_info:
+                    mapped_update_info[account_id] = {}
+                for update_info in updates_by_account:
+                    mapped_update_info[account_id][update_info.id] = update_info
+        if all_updates.outlook:
+            for account_id, updates_by_account in all_updates.outlook.items():
+                if account_id not in mapped_update_info:
+                    mapped_update_info[account_id] = {}
+                for update_info in updates_by_account:
+                    mapped_update_info[account_id][update_info.id] = update_info
 
-        ## map report_info by
+        ## map report_info by account_id, then by report item id
         mapped_report_info: Dict[str, Dict[int, report_model.MailMessageItem]] = {}
         if report_content_obj.gmail:
             for report_items_by_account in report_content_obj.gmail:
+                if report_items_by_account.account_id not in mapped_report_info:
+                    mapped_report_info[report_items_by_account.account_id] = {}
+                for report_item in report_items_by_account.messages:
+                    mapped_report_info[report_items_by_account.account_id][report_item.id] = report_item
+
+        if report_content_obj.outlook:
+            for report_items_by_account in report_content_obj.outlook:
                 if report_items_by_account.account_id not in mapped_report_info:
                     mapped_report_info[report_items_by_account.account_id] = {}
                 for report_item in report_items_by_account.messages:
@@ -183,29 +199,29 @@ def update_report_info(user_id: str, report_id: str, update_info: ReportUpdateIn
                         f"no corresponding report with id {id} in account {account_id}"
                     )
 
-                gmail_report_item = mapped_report_info[account_id][id]
-                if gmail_report_item.action_result == MessageActionResult.Success:
+                report_item = mapped_report_info[account_id][id]
+                if report_item.action_result == MessageActionResult.Success:
                     raise ResponseCode.UnsupportedAction.create_error(
                         "try to update report item that has successfully done action"
                     )
 
-                modified_category = None
-                modified_action = None
-                reply_message = None
+                modified_category: Optional[MessageCategory] = None
+                modified_action: Optional[MessageAction] = None
+                reply_message: Optional[str] = None
 
                 # update gmail_report_item
-                if gmail_report_item.category != update.category:
-                    gmail_report_item.category = update.category
+                if update.category and report_item.category != update.category:
+                    report_item.category = update.category
                     modified_category = update.category
 
-                if gmail_report_item.action != update.action:
-                    gmail_report_item.action = update.action
+                if update.action and report_item.action != update.action:
+                    report_item.action = update.action
                     modified_action = update.action
-                    if update.action == MessageAction.Reply and update.reply_message:
-                        gmail_report_item.reply_message = update.reply_message
-                        reply_message = update.reply_message
+                if report_item.action == MessageAction.Reply and update.reply_message is not None:
+                    report_item.reply_message = update.reply_message
+                    reply_message = update.reply_message
 
-                if modified_category or modified_action or reply_message:
+                if modified_category or modified_action or reply_message is not None:
                     Email.update(session, id, modified_category=modified_category, modified_action=modified_action,
                                  reply_message=reply_message)
 
@@ -250,15 +266,13 @@ def get_latest_batch_action(user_id: str, report_id: str):
     with get_session(write=False) as session:
         report = Report.get_by_id(session, report_id)
 
-    if not report:
-        raise ResponseCode.InvalidParam.create_error("no report found")
+        if not report:
+            raise ResponseCode.InvalidParam.create_error("no report found")
 
-    if str(report.user_id) != user_id:
-        raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+        if str(report.user_id) != user_id:
+            raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
 
-    batch_run = ReportBatchAction.get_latest(session, report_id=report_id)
-    if not batch_run:
-        raise ResponseCode.InvalidParam.create_error("current report has no batch action run record")
+        batch_run = ReportBatchAction.get_latest(session, report_id=report_id)
 
     return batch_run
 
@@ -270,7 +284,7 @@ def poll_last_batch_action(run_id: str):
 
 def poll_report_messages_in_queue_status(report_id: str):
     with get_session(write=False) as session:
-        return Report.get_content_subfield(session, report_id, "messages_in_queue")
+        return Report.get_content_subfield(session, report_id, ReportMessagesInQueueFieldName)
 
 
 generate_email_reply_prompt_template = ChatPromptTemplate.from_template(
@@ -297,8 +311,8 @@ generate_email_reply_prompt_template = ChatPromptTemplate.from_template(
 )
 
 
-def _search_corresponding_gmail_item(messages_by_account: List[report_model.MailMessagesByAccount], account_id: str,
-                                     id: int):
+def _search_corresponding_mail_item(messages_by_account: List[report_model.MailMessagesByAccount], account_id: str,
+                                    id: int):
     corresponding_mail_item = None
     for messages_by_account in messages_by_account:
         if corresponding_mail_item:
@@ -330,7 +344,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
 
     report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
     if source == EmailSource.Gmail:
-        corresponding_mail_item = _search_corresponding_gmail_item(report_content_obj.gmail, account_id, id)
+        corresponding_mail_item = _search_corresponding_mail_item(report_content_obj.gmail, account_id, id)
         # start generate
         ## retrival relevant email with reply_message
         email_history = None
@@ -363,16 +377,9 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
         with get_session(write=False) as session:
             account = Account.get_by_id(session, account_id)
 
-        gmail_api_client, credential = build_gmail_client(
-            account.access_token,
-            account.refresh_token,
-            account.expires_at
-        )
+        gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
         try:
-            raw_email = gmail_api_client.users().messages().get(
-                userId="me",
-                id=corresponding_mail_item.message_id,
-            )
+            raw_email = gmail_api_client.get_email(corresponding_mail_item.message_id)
         except HttpError as e:
             if e.resp.status == 404:
                 raise ResponseCode.UnsupportedAction.create_error("email seems has been deleted from your mail box")
@@ -389,18 +396,23 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
             reply_history=reply_history,
         )
 
-        if credential.token != account.access_token:
+        if gmail_api_client.access_token != account.access_token:
             with get_session(write=True) as session:
-                Account.update(session, account.id, credential.token, expires_at=int(credential.expiry.timestamp()))
+                Account.update(
+                    session,
+                    account.id,
+                    gmail_api_client.access_token,
+                    expires_at=gmail_api_client.expires_at
+                )
 
         def streaming_reply_gen():
             chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
             for chunk in chat_model.stream(formated_prompt):
-                yield chunk
+                yield chunk.content
 
         return streaming_reply_gen
     elif source == EmailSource.Outlook:
-        corresponding_mail_item = _search_corresponding_gmail_item(report_content_obj.outlook, account_id, id)
+        corresponding_mail_item = _search_corresponding_mail_item(report_content_obj.outlook, account_id, id)
         # start generate
         ## retrival relevant email with reply_message
         email_history = None
@@ -433,17 +445,11 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
         with get_session(write=False) as session:
             account = Account.get_by_id(session, account_id)
 
-        msgraph_api_client, credential = build_microsoft_graph_client(
-            account.access_token,
-            account.refresh_token,
-            account.expires_at
-        )
+        outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
         try:
-            raw_email = asyncio.run(
-                msgraph_api_client.me.messages.by_message_id(corresponding_mail_item.message_id).get()
-            )
-        except HttpError as e:
-            if e.resp.status == 404:
+            raw_email = outlook_api_client.get_email(corresponding_mail_item.message_id)
+        except APIError as e:
+            if e.response_status_code == 404:
                 raise ResponseCode.UnsupportedAction.create_error("email seems has been deleted from your mail box")
             else:
                 logger.error("Error getting outlook email: {}".format(e))
@@ -458,10 +464,10 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
             reply_history=reply_history,
         )
 
-        if credential.access_token != account.access_token:
+        if outlook_api_client.access_token != account.access_token:
             with get_session(write=True) as session:
-                Account.update(session, account.id, credential.access_token, credential.refresh_token,
-                               credential.expiry)
+                Account.update(session, account.id, outlook_api_client.access_token, outlook_api_client.refresh_token,
+                               outlook_api_client.expires_at)
 
         def streaming_reply_gen():
             chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
