@@ -48,12 +48,12 @@
         "name": {
           "type": "string"
         },
-        "email": {
+        "address": {
           "type": "string"
         }
       },
       "required": [
-        "email",
+        "address",
         "name"
       ],
       "title": "Email"

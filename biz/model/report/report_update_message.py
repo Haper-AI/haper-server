@@ -33,24 +33,6 @@ def from_union(fs, x):
     assert False
 
 
-class AccountInfo:
-    account_id: str
-
-    def __init__(self, account_id: str) -> None:
-        self.account_id = account_id
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'AccountInfo':
-        assert isinstance(obj, dict)
-        account_id = from_str(obj.get("account_id"))
-        return AccountInfo(account_id)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["account_id"] = from_str(self.account_id)
-        return result
-
-
 class GmailNewMessage:
     message_id: str
     thread_id: str
@@ -74,43 +56,70 @@ class GmailNewMessage:
 
 
 class Gmail:
-    account_info: AccountInfo
+    account_id: str
     new_messages: List[GmailNewMessage]
 
-    def __init__(self, account_info: AccountInfo, new_messages: List[GmailNewMessage]) -> None:
-        self.account_info = account_info
+    def __init__(self, account_id: str, new_messages: List[GmailNewMessage]) -> None:
+        self.account_id = account_id
         self.new_messages = new_messages
 
     @staticmethod
     def from_dict(obj: Any) -> 'Gmail':
         assert isinstance(obj, dict)
-        account_info = AccountInfo.from_dict(obj.get("account_info"))
+        account_id = from_str(obj.get("account_id"))
         new_messages = from_list(GmailNewMessage.from_dict, obj.get("new_messages"))
-        return Gmail(account_info, new_messages)
+        return Gmail(account_id, new_messages)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["account_info"] = to_class(AccountInfo, self.account_info)
+        result["account_id"] = from_str(self.account_id)
         result["new_messages"] = from_list(lambda x: to_class(GmailNewMessage, x), self.new_messages)
+        return result
+
+
+class Outlook:
+    account_id: str
+    new_messages: List[str]
+
+    def __init__(self, account_id: str, new_messages: List[str]) -> None:
+        self.account_id = account_id
+        self.new_messages = new_messages
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'Outlook':
+        assert isinstance(obj, dict)
+        account_id = from_str(obj.get("account_id"))
+        new_messages = from_list(from_str, obj.get("new_messages"))
+        return Outlook(account_id, new_messages)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["account_id"] = from_str(self.account_id)
+        result["new_messages"] = from_list(from_str, self.new_messages)
         return result
 
 
 class Messages:
     gmail: Optional[Gmail]
+    outlook: Optional[Outlook]
 
-    def __init__(self, gmail: Optional[Gmail]) -> None:
+    def __init__(self, gmail: Optional[Gmail], outlook: Optional[Outlook]) -> None:
         self.gmail = gmail
+        self.outlook = outlook
 
     @staticmethod
     def from_dict(obj: Any) -> 'Messages':
         assert isinstance(obj, dict)
         gmail = from_union([Gmail.from_dict, from_none], obj.get("gmail"))
-        return Messages(gmail)
+        outlook = from_union([Outlook.from_dict, from_none], obj.get("outlook"))
+        return Messages(gmail, outlook)
 
     def to_dict(self) -> dict:
         result: dict = {}
         if self.gmail is not None:
             result["gmail"] = from_union([lambda x: to_class(Gmail, x), from_none], self.gmail)
+        if self.outlook is not None:
+            result["outlook"] = from_union([lambda x: to_class(Outlook, x), from_none], self.outlook)
         return result
 
 

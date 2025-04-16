@@ -10,10 +10,10 @@ from .base import Base
 
 
 class MessageTrackingStatus(str, PyEnum):
-    NOT_STARTED = "not_started"
-    ONGOING = "ongoing"
-    STOPPED = "stopped"
-    ERROR = "error"
+    NOT_STARTED = "NotStarted"
+    ONGOING = "Ongoing"
+    STOPPED = "Stopped"
+    ERROR = "Error"
 
 
 class MessageTrackingRecord(Base):
@@ -73,7 +73,9 @@ class MessageTrackingRecord(Base):
         return record
 
     @classmethod
-    def list_by_user_id(cls, session: Session, user_id: Union[str, UUID]):
+    def list_by_user_id(cls, session: Session, user_id: Union[str, UUID], ongoing_only: bool = False):
+        if ongoing_only:
+            return session.query(cls).filter_by(user_id=user_id, status=MessageTrackingStatus.ONGOING).all()
         return session.query(cls).filter_by(user_id=user_id).all()
 
     @classmethod

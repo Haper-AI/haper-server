@@ -38,13 +38,26 @@ class RuntimeEnv:
         self.GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
         self.GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
-        # aws sqs
+        # aws
+        self.AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+        self.AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+        ## aws sqs
         self.SQS_REGION = os.getenv("SQS_REGION")
         self.SQS_ENDPOINT = os.getenv("SQS_ENDPOINT")
         self.SQS_REPORT_ASYNC_ACTION_QUEUE_URL = os.getenv("SQS_REPORT_ASYNC_ACTION_QUEUE_URL")
-        self.AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-        self.AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+
+        ## aws secret manager
+        self.AWS_SM_REGION = os.getenv("AWS_SM_REGION")
+        self.AWS_SM_SECRET_NAME = os.getenv("AWS_SM_SECRET_NAME")
+        self.AWS_SM_KEY_NAME_OUTLOOK_SUB_PRIVATE = os.getenv("AWS_SM_KEY_NAME_OUTLOOK_SUB_PRIVATE")
+        self.AWS_SM_KEY_NAME_OUTLOOK_SUB_PUBLIC = os.getenv("AWS_SM_KEY_NAME_OUTLOOK_SUB_PUBLIC")
 
         # google cloud
         self.GMAIL_WATCH_PUB_SUB_TOPIC = os.getenv("GMAIL_WATCH_PUB_SUB_TOPIC")
+
+        # microsoft azure
+        self.MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
+        self.MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
+        self.OUTLOOK_SYNC_WEBHOOK_URL = os.getenv("OUTLOOK_SYNC_WEBHOOK_URL")
+        self.MICROSOFT_CERTIFICATE_KEY_ID = os.getenv("MICROSOFT_CERTIFICATE_KEY_ID")
 

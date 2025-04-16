@@ -1,11 +1,12 @@
-import base64
 import json
 from datetime import datetime
 
 from googleapiclient.errors import HttpError
+from kiota_abstractions.api_error import APIError
 
 from biz.controller import report_update as report_update_ctrl
-from biz.controller.gmail_util import RawGmailInfo
+from biz.controller.gmail_util import RawGmailInfo, GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.report import Report, MessageAction
 from biz.dal.report_batch_action import MessageActionResult, ReportBatchAction, BatchActionRunStatus
 from biz.dal.user import Account
@@ -15,50 +16,80 @@ from biz.model.report import action_log as action_log_model
 from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.model.report.report_update_message import ReportUpdateMessage
 from biz.service.db import get_session, init_db
-from biz.service.sqs import get_sqs_client, init_sqs
-from biz.utils import track_haper_error
+from biz.service.aws.sqs import get_sqs_client, init_sqs
+from biz.utils import track_haper_error, split_email_str
 from biz.utils.env import RuntimeEnv
-from biz.utils.gmail import build_gmail_client
 from biz.utils.logger import logger
 
 
 def handle_report_update(the_message: ReportUpdateMessage):
     if the_message.messages.gmail:  # handle gmail messages
-        gmail_account_info = the_message.messages.gmail.account_info
+        account_id = the_message.messages.gmail.account_id
         new_gmail_messages = the_message.messages.gmail.new_messages
 
         # get user account info from db
         with get_session(False) as session:
-            account = Account.get_by_id(session, gmail_account_info.account_id)
+            account = Account.get_by_id(session, account_id)
 
         # use user account info to call gmail api
-        gmail_api_client, _ = build_gmail_client(
-            account.access_token,
-            account.refresh_token,
-            datetime.fromtimestamp(account.expires_at)
-        )
+        gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
 
+        # fetch emails
         emails = []
         for new_gmail_msg in new_gmail_messages:
             try:
-                email_info = gmail_api_client.users().messages().get(
-                    userId="me",
-                    id=new_gmail_msg.message_id,
-                ).execute()
+                email_info = gmail_api_client.get_email(new_gmail_msg.message_id)
                 emails.append(RawGmailInfo(new_gmail_msg.message_id, new_gmail_msg.thread_id, email_info))
             except HttpError as e:
                 if e.resp.status == 404:
-                    logger.warning(f"Message not found: {new_gmail_msg.message_id}")
+                    logger.warning(f"Gmail not found: {new_gmail_msg.message_id}")
                     continue
 
-        # use llm process email info
+        # use llm process found email info
         report_update_ctrl.update_report_with_gmail_message(
             the_message.user_id,
-            str(gmail_account_info.account_id),
+            str(account_id),
             account.email,
             the_message.report_id,
             emails,
+            len(new_gmail_messages)
         )
+    elif the_message.messages.outlook:
+        account_id = the_message.messages.outlook.account_id
+        new_mail_ids = the_message.messages.outlook.new_messages
+
+        # get user account info from db
+        with get_session(False) as session:
+            account = Account.get_by_id(session, account_id)
+
+        # use user account info to call outlook api
+        outlook_api_client = OutlookAPIClient(
+            account.access_token,
+            account.refresh_token,
+            account.expires_at
+        )
+
+        # fetch emails
+        emails = []
+        for mail_id in new_mail_ids:
+            try:
+                result = outlook_api_client.get_email(mail_id)
+                emails.append(result)
+            except APIError as e:
+                if e.response_status_code == 404:
+                    logger.warning(f"Outlook mail not found: {mail_id}")
+                    continue
+
+        # use llm process email info
+        report_update_ctrl.update_report_with_outlook_emails(
+            the_message.user_id,
+            str(account_id),
+            account.email,
+            the_message.report_id,
+            emails,
+            len(new_mail_ids)
+        )
+
 
 def handle_report_batch_action(the_message: ReportBatchActionMessage):
     with get_session(write=True) as session:
@@ -66,6 +97,7 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
         report_obj = report_model.report_from_dict(report.content)
         ReportBatchAction.update(session, the_message.run_id, BatchActionRunStatus.Ongoing)
 
+    # TODO: remove redundant code
     if report_obj.content.gmail:
         # apply gmail actions
         for messages_by_account in report_obj.content.gmail:
@@ -74,56 +106,29 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                 with get_session(write=False) as session:
                     account = Account.get_by_id(session, messages_by_account.account_id)
 
-                gmail_api_client, credential = build_gmail_client(
-                    account.access_token,
-                    account.refresh_token,
-                    datetime.fromtimestamp(account.expires_at)
-                )
+                gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
 
                 for gmail_item in messages_by_account.messages:
+                    if gmail_item.action_result == MessageActionResult.Success:
+                        # skip for already success action
+                        continue
                     try:
-                        if gmail_item.action_result == MessageActionResult.Success:
-                            # skip for already success action
-                            continue
-
                         if gmail_item.action == MessageAction.Read:
-                            gmail_api_client.users().messages().modify(
-                                userId='me',
-                                id=gmail_item.message_id,
-                                body={
-                                    'removeLabelIds': ['UNREAD'],
-                                }
-                            ).execute()
+                            gmail_api_client.read_email(gmail_item.message_id)
                         elif gmail_item.action == MessageAction.Delete:
-                            gmail_api_client.users().messages().trash(
-                                userId='me',
-                                id=gmail_item.message_id,
-                            ).execute()
+                            gmail_api_client.trash_email(gmail_item.message_id)
                         elif gmail_item.action == MessageAction.Reply:
-                            body_data = base64.urlsafe_b64encode(gmail_item.reply_message.encode("utf-8"))
-                            gmail_api_client.users().messages().send(
-                                userId='me',
-                                body={
-                                    "threadId": gmail_item.thread_id,
-                                    "payload": {
-                                        # TODO: support more type of mimeType
-                                        "mimeType": "text/plain",
-                                        "body": {
-                                            "size": len(body_data),
-                                            "data": body_data.decode("utf-8")
-                                        }
-                                    }
-                                }
-                            ).execute()
-
-                        # if gmail_item.action == MessageAction.Ignore:
+                            _, recipient_address = split_email_str(gmail_item.sender)
+                            gmail_api_client.reply_email_text(recipient_address, gmail_item.thread_id,
+                                                              gmail_item.reply_message)
+                        # elif gmail_item.action == MessageAction.Ignore:
                         # ignore
 
                         gmail_item.action_result = MessageActionResult.Success
                         log_to_add = action_log_model.ActionLog(
                             at=int(datetime.now().timestamp()),
                             id=gmail_item.id,
-                            message=f"{gmail_item.action} {gmail_item.sender} failed",
+                            message=f"{gmail_item.action} {gmail_item.sender} succeed",
                         ).to_dict()
 
                     except Exception as e:
@@ -141,6 +146,64 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
                                 log_to_add,
                             ])
                             if gmail_item.action_result == MessageActionResult.Success:
+                                ReportBatchAction.increase_success_actions(session, the_message.run_id)
+                            else:
+                                ReportBatchAction.increase_failed_actions(session, the_message.run_id)
+                            # update content
+                            Report.update_content_subfield(session, the_message.report_id, "content",
+                                                           report_obj.content.to_dict())
+
+    if report_obj.content.outlook:
+        for messages_by_account in report_obj.content.outlook:
+            if messages_by_account.messages:
+                # get account
+                with get_session(write=False) as session:
+                    account = Account.get_by_id(session, messages_by_account.account_id)
+
+                outlook_api_client = OutlookAPIClient(
+                    account.access_token,
+                    account.refresh_token,
+                    account.expires_at
+                )
+
+                for outlook_item in messages_by_account.messages:
+                    if outlook_item.action_result == MessageActionResult.Success:
+                        # skip for already success action
+                        continue
+                    try:
+                        if outlook_item.action == MessageAction.Read:
+                            outlook_api_client.read_email(outlook_item.message_id)
+                        elif outlook_item.action == MessageAction.Delete:
+                            outlook_api_client.trash_email(outlook_item.message_id)
+                        elif outlook_item.action == MessageAction.Reply:
+                            recipient_name, recipient_address = split_email_str(outlook_item.sender)
+                            outlook_api_client.reply_email_text(outlook_item.message_id, recipient_name,
+                                                                recipient_address, outlook_item.reply_message)
+                        # elif outlook_item.action == MessageAction.Ignore
+                        #     # Ignore
+                        #     pass
+
+                        outlook_item.action_result = MessageActionResult.Success
+                        log_to_add = action_log_model.ActionLog(
+                            at=int(datetime.now().timestamp()),
+                            id=outlook_item.id,
+                            message=f"{outlook_item.action} {outlook_item.sender} succeed",
+                        ).to_dict()
+                    except Exception as e:
+                        logger.error(e)
+                        outlook_item.action_result = MessageActionResult.Error
+                        log_to_add = action_log_model.ActionLog(
+                            at=int(datetime.now().timestamp()),
+                            id=outlook_item.id,
+                            message=f"{outlook_item.action} {outlook_item.sender} failed",
+                        ).to_dict()
+                    finally:
+                        with get_session(write=True) as session:
+                            # insert action log
+                            ReportBatchAction.append_logs(session, the_message.run_id, [
+                                log_to_add,
+                            ])
+                            if outlook_item.action_result == MessageActionResult.Success:
                                 ReportBatchAction.increase_success_actions(session, the_message.report_id)
                             else:
                                 ReportBatchAction.increase_failed_actions(session, the_message.report_id)
@@ -150,24 +213,26 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
 
     # set batch run status
     with get_session(write=True) as session:
-        ReportBatchAction.update(session, the_message.report_id, status=BatchActionRunStatus.Done)
+        ReportBatchAction.update(session, the_message.run_id, status=BatchActionRunStatus.Done)
 
 
 def init():
     init_db()
     init_sqs()
 
+MESSAGE_PROCESSING_MAX_RETRIES = 5
 
 if __name__ == '__main__':
     logger.info('Agent service starting up...')
     init()
     logger.info('Agent service start consuming')
-    try:
-        while True:
+    while True:
+        try:
             response = get_sqs_client().receive_message(
                 QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
                 MaxNumberOfMessages=1,
                 WaitTimeSeconds=10,  # long pooling
+                AttributeNames=['ApproximateReceiveCount']
             )
 
             messages = response.get('Messages', [])
@@ -187,6 +252,8 @@ if __name__ == '__main__':
                     )
                     continue
 
+                receive_count = int(message['Attributes']['ApproximateReceiveCount'])
+
                 try:
                     sqs_message_obj = sqs_message_model.sqs_message_from_dict(json.loads(message['Body']))
                     if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE:
@@ -197,6 +264,17 @@ if __name__ == '__main__':
                     file_name, line_number, func_name, text = track_haper_error(e)
                     logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
                     logger.error(f"Error processing message: {message['MessageId']}, error: {e}")
+
+                    # release message by change visibility timeout or leave it to the dead letter queue
+                    if receive_count >= MESSAGE_PROCESSING_MAX_RETRIES:
+                        logger.error(f"Message {message['MessageId']} exceeded max retries, moving to dead letter queue")
+                    else:
+                        get_sqs_client().change_message_visibility(
+                            QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
+                            ReceiptHandle=message['ReceiptHandle'],
+                            VisibilityTimeout=0  # make it visible again
+                        )
+
                     continue
 
                 # ACK message
@@ -205,5 +283,5 @@ if __name__ == '__main__':
                     ReceiptHandle=message['ReceiptHandle']
                 )
                 logger.info(f"Successfully ACK message: {message['MessageId']}")
-    except Exception as e:
-        logger.error(f"Unexpected error occurred: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error occurred: {e}")

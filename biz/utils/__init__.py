@@ -1,4 +1,5 @@
 import os
+import re
 import traceback
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,3 +19,11 @@ def track_haper_error(e: Exception):
 
     file_name, line_number, func_name, text = tb[-1]
     return file_name, line_number, func_name, text
+
+
+def split_email_str(email_str):
+    match = re.match(r"(.+?)\s*<(.+?)>", email_str)
+    if match:
+        return match.group(1).strip(), match.group(2).strip()
+
+    return None, None

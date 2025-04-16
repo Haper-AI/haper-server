@@ -17,8 +17,8 @@ class BatchActionRunStatus(str, PyEnum):
 
 
 class MessageActionResult(str, PyEnum):
-    Success = "success"
-    Error = "error"
+    Success = "Success"
+    Error = "Error"
 
 
 class ReportBatchAction(Base):

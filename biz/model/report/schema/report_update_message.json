@@ -30,6 +30,9 @@
       "properties": {
         "gmail": {
           "$ref": "#/definitions/Gmail"
+        },
+        "outlook": {
+          "$ref": "#/definitions/Outlook"
         }
       },
       "required": [
@@ -40,8 +43,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "account_info": {
-          "$ref": "#/definitions/AccountInfo"
+        "account_id": {
+          "type": "string"
         },
         "new_messages": {
           "type": "array",
@@ -51,23 +54,10 @@
         }
       },
       "required": [
-        "account_info",
+        "account_id",
         "new_messages"
       ],
       "title": "Gmail"
-    },
-    "AccountInfo": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "account_id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "account_id"
-      ],
-      "title": "AccountInfo"
     },
     "GmailNewMessage": {
       "type": "object",
@@ -85,6 +75,26 @@
         "thread_id"
       ],
       "title": "GmailNewMessage"
+    },
+    "Outlook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "new_messages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "account_id",
+        "new_messages"
+      ],
+      "title": "Outlook"
     }
   }
 }

@@ -1,14 +1,17 @@
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
+from kiota_abstractions.api_error import APIError
 from sqlalchemy.orm import make_transient
 
+from biz.controller.gmail_util import GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.controller.report import start_new_reporting_sequence, end_reporting_sequence
+from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
 from biz.dal.user import Account
 from biz.service.db import get_session
-from biz.utils.env import RuntimeEnv
-from biz.utils.gmail import build_gmail_client
 from biz.utils.response import ResponseCode
 
 
@@ -25,14 +28,16 @@ def list_user_message_tracking_status(user_id: str):
                 if account.id not in message_tracking_status_by_account:
                     result.append({
                         'account_id': account.id,
+                        'email': account.email,
                         'provider': account.provider,
-                        'tracking_status': MessageTrackingStatus.NOT_STARTED,
+                        'status': MessageTrackingStatus.NOT_STARTED,
                     })
                 else:
                     result.append({
                         'account_id': account.id,
+                        'email': account.email,
                         'provider': account.provider,
-                        'tracking_status': message_tracking_status_by_account[account.id].status,
+                        'status': message_tracking_status_by_account[account.id].status,
                         'created_at': message_tracking_status_by_account[account.id].created_at,
                         'updated_at': message_tracking_status_by_account[account.id].updated_at,
                     })
@@ -62,50 +67,50 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
             start_new_reporting_sequence(session, user_id)
 
         # start sync message with provider
-        if account.provider == 'google':
-            gmail_api_client, credential = build_gmail_client(
-                account.access_token,
-                account.refresh_token,
-                datetime.fromtimestamp(account.expires_at)
-            )
-            gmail_watch_resp = gmail_api_client.users().watch(
-                userId='me',
-                body={
-                    'topicName': RuntimeEnv.Instance().GMAIL_WATCH_PUB_SUB_TOPIC,
-                    'labelIds': ['INBOX'],
-                    'labelFilterBehavior': 'INCLUDE'
-                }
-            ).execute()
-
-            history_id = gmail_watch_resp.get('historyId')
-            expiration = gmail_watch_resp.get('expiration')
-
-            MessageTrackingRecord.update(
-                session, user_id, account.id,
-                status=MessageTrackingStatus.ONGOING,
-                extra_info={
-                    'pre_history_id': history_id,
-                    'expiration': expiration
-                }
-            )
-
-            tracking_record.status = MessageTrackingStatus.ONGOING
-            tracking_record.updated_at = datetime.now(timezone.utc)
-
-            if credential.token != account.access_token:
+        extra_info = {}
+        if account.provider == AccountProvider.Google:
+            gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            history_id, expiration = gmail_api_client.watch_gmail()
+            extra_info['pre_history_id'] = history_id
+            extra_info['expiration'] = expiration
+            if gmail_api_client.access_token != account.access_token:
                 Account.update(
                     session,
                     account.id,
-                    credential.token,
-                    expires_at=int(credential.expiry.timestamp()),
+                    gmail_api_client.access_token,
+                    expires_at=gmail_api_client.expires_at,
                 )
+        elif account.provider == AccountProvider.Microsoft:
+            outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            subscription_id, expiration = outlook_api_client.watch_outlook()
+            extra_info['expiration'] = expiration
+            extra_info['subscription_id'] = subscription_id
+
+            if outlook_api_client.access_token != account.access_token:
+                Account.update(
+                    session,
+                    account.id,
+                    outlook_api_client.access_token,
+                    refresh_token=outlook_api_client.refresh_token,
+                    expires_at=outlook_api_client.expires_at,
+                )
+
+        MessageTrackingRecord.update(
+            session, user_id, account.id,
+            status=MessageTrackingStatus.ONGOING,
+            extra_info=extra_info
+        )
+
+        tracking_record.status = MessageTrackingStatus.ONGOING
+        tracking_record.updated_at = datetime.now(timezone.utc)
 
         make_transient(tracking_record), make_transient(account)
 
     return {
         "account_id": account.id,
+        "email": account.email,
         "provider": account.provider,
-        "tracking_status": tracking_record.status,
+        "status": tracking_record.status,
         "created_at": tracking_record.created_at,
         "updated_at": tracking_record.updated_at,
     }
@@ -124,39 +129,33 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
         account = Account.add(session, user_id, provider, provider_account_id,
                               access_token, refresh_token, expires_at, email)
 
-        # if the ongoing message tracking count goes from 0 to 1, start report sequence
-        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
-            start_new_reporting_sequence(session, user_id)
-
         extra_info = {}
         # start sync message with provider
-        if provider == 'google':
-            gmail_api_client, credential = build_gmail_client(
-                account.access_token,
-                account.refresh_token,
-                datetime.fromtimestamp(account.expires_at)
-            )
-            gmail_watch_resp = gmail_api_client.users().watch(
-                userId='me',
-                topicName=RuntimeEnv.Instance().GMAIL_WATCH_PUB_SUB_TOPIC,
-                labelIds=['INBOX'],
-                labelFilterBehavior="INCLUDE"
-            ).execute()
-
-            history_id = gmail_watch_resp.get('historyId')
-            expiration = gmail_watch_resp.get('expiration')
+        if provider == AccountProvider.Google:
+            gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            history_id, expiration = gmail_api_client.watch_gmail()
             extra_info['expiration'] = expiration
             extra_info['pre_history_id'] = history_id
+        elif provider == AccountProvider.Microsoft:
+            outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            subscription_id, expiration = outlook_api_client.watch_outlook()
+            extra_info['expiration'] = expiration
+            extra_info['subscription_id'] = subscription_id
 
         # create tracking record
         tracking_record = MessageTrackingRecord.add(session, user_id, account.id, extra_info=extra_info)
+
+        # if the ongoing message tracking count goes from 0 to 1, start report sequence
+        if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
+            start_new_reporting_sequence(session, user_id)
 
         make_transient(tracking_record), make_transient(account)
 
     return {
         "account_id": account.id,
+        "email": account.email,
         "provider": account.provider,
-        "tracking_status": tracking_record.status,
+        "status": tracking_record.status,
         "created_at": tracking_record.created_at,
         "updated_at": tracking_record.updated_at,
     }
@@ -184,29 +183,43 @@ def end_message_tracking(user_id: str, account_id: str):
             end_reporting_sequence(session, user_id)
 
         # stop message sync with provider
-        if account.provider == 'google':
-            gmail_api_client, credential = build_gmail_client(
-                account.access_token,
-                account.refresh_token,
-                datetime.fromtimestamp(account.expires_at)
-            )
+        if account.provider == AccountProvider.Google:
+            gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            gmail_api_client.stop_watch()
 
-            gmail_api_client.users().stop(userId='me').execute()
-
-            if credential.token != account.access_token:
+            if gmail_api_client.access_token != account.access_token:
                 Account.update(
                     session,
                     account.id,
-                    credential.token,
-                    expires_at=int(credential.expiry.timestamp())
+                    gmail_api_client.access_token,
+                    expires_at=gmail_api_client.expires_at,
+                )
+        elif account.provider == AccountProvider.Microsoft:
+            outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            try:
+                outlook_api_client.stop_watch_outlook(tracking_record.extra_info["subscription_id"])
+            except APIError as e:
+                if e.response_status_code == 404:
+                    logging.info("watch already expired")
+                else:
+                    raise e
+
+            if outlook_api_client.access_token != account.access_token:
+                Account.update(
+                    session,
+                    account.id,
+                    outlook_api_client.access_token,
+                    refresh_token=outlook_api_client.refresh_token,
+                    expires_at=outlook_api_client.expires_at,
                 )
 
         make_transient(tracking_record), make_transient(account)
 
     return {
         "account_id": account.id,
+        "email": account.email,
         "provider": account.provider,
-        "tracking_status": tracking_record.status,
+        "status": tracking_record.status,
         "created_at": tracking_record.created_at,
         "updated_at": tracking_record.updated_at,
     }
