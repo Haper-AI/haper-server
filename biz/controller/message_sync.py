@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 
 from biz.controller.gmail_util import GmailAPIClient
@@ -6,8 +6,9 @@ from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.email import EmailSource
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
-from biz.dal.report import Report
+from biz.dal.report import Report, ReportStatus
 from biz.dal.user import Account
+from biz.dal.user_setting import UserSetting, DEFAULT_REPORT_MAX_TIME_DURATION
 from biz.model import ReportMessagesInQueueFieldName
 from biz.service.db import get_session
 from biz.service.aws.sqs import send_report_update_message
@@ -16,7 +17,10 @@ from biz.utils.logger import logger
 from biz.model.report import report as report_model
 
 
+# TODO: to avoid duplicate message process, use redis to cache processed message ids
+
 def sync_user_gmail_message(email: str, history_id: int):
+    report_max_duration = DEFAULT_REPORT_MAX_TIME_DURATION
     with get_session(write=False) as session:
         account = Account.get_by_mail_and_provider(session, email, AccountProvider.Google)
         if account is None:
@@ -28,6 +32,9 @@ def sync_user_gmail_message(email: str, history_id: int):
         if tracking_status is None or tracking_status.status != MessageTrackingStatus.ONGOING:
             logger.warning("message for account {} is not in synchronizing right now".format(account.id))
             return
+        user_setting = UserSetting.get_by_user_id(session, account.user_id)
+        if user_setting is not None:
+            report_max_duration = user_setting.report_max_duration
 
     # get messages added
     gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
@@ -44,9 +51,10 @@ def sync_user_gmail_message(email: str, history_id: int):
             )
         # call watch if necessary, TODO: move to a cronjob
         new_extra_info = tracking_status.extra_info
-        if datetime.now() + timedelta(days=1) > datetime.fromtimestamp(tracking_status.extra_info["expiration"]):
+        if int((datetime.now() + timedelta(days=2)).timestamp()) > tracking_status.extra_info["expiration"]:
             _, expiration = gmail_api_client.watch_gmail()
             new_extra_info["expiration"] = expiration
+            logger.info("gmail watch is about to expire, re-watch it")
 
         # update extra_info
         new_extra_info["pre_history_id"] = history_id
@@ -72,10 +80,22 @@ def sync_user_gmail_message(email: str, history_id: int):
                 messages_in_queue = latest_report.content[ReportMessagesInQueueFieldName]
 
             messages_in_queue[EmailSource.Gmail] += len(new_gmail_message)
-            logger.info("increasing {} gmail messages, remaining messages in queue: {}".format(len(new_gmail_message),
-                                                                                               messages_in_queue))
             # update report content
             Report.update_content_subfield(session, latest_report.id, ReportMessagesInQueueFieldName, messages_in_queue)
+            logger.info("increasing {} gmail messages, remaining messages in queue: {}".format(
+                len(new_gmail_message),
+                messages_in_queue
+            ))
+
+            # finalize the report if exceed max duration and create a new one, TODO: move to a cronjob
+            if int(latest_report.created_at.timestamp()) + report_max_duration <= int(datetime.now().timestamp()):
+                Report.update(session, latest_report.id, status=ReportStatus.Finalized)
+                Report.add(session, account.user_id, {})
+                logger.info("report {} exceed max duration {}, finalized at {}".format(
+                    latest_report.id,
+                    report_max_duration,
+                    int(datetime.now().timestamp())
+                ))
 
             # send the new messages to sqs for the report consumer
             report_update_message = rum_model.ReportUpdateMessage(
@@ -97,11 +117,16 @@ def sync_user_gmail_message(email: str, history_id: int):
 
 def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
     for email, message_ids in message_ids_by_email.items():
+        report_max_duration = DEFAULT_REPORT_MAX_TIME_DURATION
         with (get_session(write=True) as session):
             account = Account.get_by_mail_and_provider(session, email, AccountProvider.Microsoft)
             if account is None:
                 logger.warning("email {} is not connected to a registered account".format(email))
                 continue
+
+            user_setting = UserSetting.get_by_user_id(session, account.user_id)
+            if user_setting is not None:
+                report_max_duration = user_setting.report_max_duration
 
             tracking_status = MessageTrackingRecord.get_by_user_id_and_account_id(session, account.user_id, account.id)
             if tracking_status is None or tracking_status.status != MessageTrackingStatus.ONGOING:
@@ -109,8 +134,8 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
                 continue
 
             # update subscription if necessary, TODO: move to a cronjob
-            if datetime.now() + timedelta(days=1) > datetime.fromtimestamp(
-                    tracking_status.extra_info["expiration"]):
+            if int((datetime.now() + timedelta(days=2)).timestamp()) > tracking_status.extra_info["expiration"]:
+                logger.info("outlook watch is about to expire, re-watch it")
                 outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
                 new_expiration = outlook_api_client.refresh_watch_outlook(tracking_status.extra_info["subscription_id"])
 
@@ -149,9 +174,23 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
                 messages_in_queue = latest_report.content[ReportMessagesInQueueFieldName]
 
             messages_in_queue[EmailSource.Outlook] += len(message_ids)
-            logger.info("increasing {} outlook messages, remaining messages in queue: {}".format(len(message_ids),
-                                                                                                 messages_in_queue))
 
+            # update report content
+            Report.update_content_subfield(session, latest_report.id, ReportMessagesInQueueFieldName, messages_in_queue)
+            logger.info("increasing {} outlook messages, remaining messages in queue: {}".format(
+                len(message_ids),
+                messages_in_queue
+            ))
+
+            # finalize the report if exceed max duration and create a new one, TODO: move to a cronjob
+            if int(latest_report.created_at.timestamp()) + report_max_duration <= int(datetime.now().timestamp()):
+                Report.update(session, latest_report.id, status=ReportStatus.Finalized)
+                Report.add(session, account.user_id, {})
+                logger.info("report {} exceed max duration {}, finalized at {}".format(
+                    latest_report.id,
+                    report_max_duration,
+                    int(datetime.now().timestamp())
+                ))
             # send the new messages to sqs for the report consumer
             report_update_message = rum_model.ReportUpdateMessage(
                 user_id=str(account.user_id),
@@ -166,5 +205,3 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
             )
             send_report_update_message(report_update_message, str(latest_report.id))
             logger.info("send sqs report update message")
-            # update report content
-            Report.update_content_subfield(session, latest_report.id, ReportMessagesInQueueFieldName, messages_in_queue)

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.orm import make_transient
 
@@ -21,29 +21,30 @@ def get_user_setting(user_id: str):
     return user_setting
 
 
-def new_user_setting(user_id: str, key_message_tags: List[str]):
+def new_user_setting(user_id: str, key_message_tags: Optional[List[str]]=None, report_max_duration: Optional[int]=None):
     with get_session(write=True) as session:
         user_setting = UserSetting.get_by_user_id(session, user_id)
         if user_setting:
             raise ResponseCode.UnsupportedAction.create_error("user setting already exist")
 
-        user_setting = UserSetting.add(session, user_id, key_message_tags)
+        user_setting = UserSetting.add(session, user_id, key_message_tags, report_max_duration)
 
         make_transient(user_setting)
 
     return user_setting
 
 
-def update_user_setting(user_id: str, key_message_tags: List[str]):
+def update_user_setting(user_id: str, key_message_tags: Optional[List[str]]=None, report_max_duration: Optional[int]=None):
     with get_session(write=True) as session:
         user_setting = UserSetting.get_by_user_id(session, user_id)
         if not user_setting:
             raise ResponseCode.UnsupportedAction.create_error("user setting does not exist")
 
-        UserSetting.update(session, user_id, key_message_tags)
+        UserSetting.update(session, user_id, key_message_tags, report_max_duration)
         make_transient(user_setting)
 
     user_setting.key_message_tags = key_message_tags
+    user_setting.report_max_duration = report_max_duration
     return user_setting
 
 

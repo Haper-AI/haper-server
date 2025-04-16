@@ -156,9 +156,10 @@ update_summary_template = ChatPromptTemplate.from_template(
         - summary
         - tags
       
-      5. You must output the result as a list of RichText json objects. And in order to kep summary concise, try to 
-      combine some RichText if possible. Do not include any explanation, additional text or markdown characters. 
-      Return JSON only. 
+      5. Keep summary as concise as possible, not include too much detail and try to combine some RichText if possible.
+      
+      6. You must output the result as a list of RichText json objects. Do not include any explanation, 
+      additional text or markdown characters. Return JSON only. 
     
     
     Current Summary:

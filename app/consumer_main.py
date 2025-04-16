@@ -220,17 +220,19 @@ def init():
     init_db()
     init_sqs()
 
+MESSAGE_PROCESSING_MAX_RETRIES = 5
 
 if __name__ == '__main__':
     logger.info('Agent service starting up...')
     init()
     logger.info('Agent service start consuming')
-    try:
-        while True:
+    while True:
+        try:
             response = get_sqs_client().receive_message(
                 QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
                 MaxNumberOfMessages=1,
                 WaitTimeSeconds=10,  # long pooling
+                AttributeNames=['ApproximateReceiveCount']
             )
 
             messages = response.get('Messages', [])
@@ -250,6 +252,8 @@ if __name__ == '__main__':
                     )
                     continue
 
+                receive_count = int(message['Attributes']['ApproximateReceiveCount'])
+
                 try:
                     sqs_message_obj = sqs_message_model.sqs_message_from_dict(json.loads(message['Body']))
                     if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE:
@@ -260,6 +264,17 @@ if __name__ == '__main__':
                     file_name, line_number, func_name, text = track_haper_error(e)
                     logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
                     logger.error(f"Error processing message: {message['MessageId']}, error: {e}")
+
+                    # release message by change visibility timeout or leave it to the dead letter queue
+                    if receive_count >= MESSAGE_PROCESSING_MAX_RETRIES:
+                        logger.error(f"Message {message['MessageId']} exceeded max retries, moving to dead letter queue")
+                    else:
+                        get_sqs_client().change_message_visibility(
+                            QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
+                            ReceiptHandle=message['ReceiptHandle'],
+                            VisibilityTimeout=0  # make it visible again
+                        )
+
                     continue
 
                 # ACK message
@@ -268,5 +283,5 @@ if __name__ == '__main__':
                     ReceiptHandle=message['ReceiptHandle']
                 )
                 logger.info(f"Successfully ACK message: {message['MessageId']}")
-    except Exception as e:
-        logger.error(f"Unexpected error occurred: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error occurred: {e}")

@@ -1,4 +1,5 @@
 import json
+import uuid
 
 import boto3
 from botocore.client import BaseClient
@@ -40,8 +41,8 @@ def send_report_update_message(message: ReportUpdateMessage, report_id: str):
         # will be sent to the same consumer so that it can avoid concurrency issue for report updating.
         # But this will also require the sqs queue be a FIFO queue
         MessageGroupId=report_id,
-        # As we use ContentBasedDeduplication for sqs queue, we can skip creating our own
-        # MessageDeduplicationId=str(uuid.uuid4()) if report_id else None,
+        # If we use ContentBasedDeduplication for sqs queue, we can skip creating our own deduplication id
+        MessageDeduplicationId=str(uuid.uuid4()),
     )
 
 def send_report_batch_action_message(message: ReportBatchActionMessage, report_id: str):
@@ -55,4 +56,6 @@ def send_report_batch_action_message(message: ReportBatchActionMessage, report_i
         QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
         MessageBody=json.dumps(sqs_message_obj.to_dict()),
         MessageGroupId=report_id,
+        # If we use ContentBasedDeduplication for sqs queue, we can skip creating our own deduplication id
+        MessageDeduplicationId=str(uuid.uuid4()),
     )

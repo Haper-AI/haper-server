@@ -10,6 +10,7 @@ from googleapiclient.discovery import build
 from biz.utils import split_email_str
 from biz.utils.env import RuntimeEnv
 from biz.model.report import report_update_message as rum_model
+from biz.utils.logger import logger
 
 
 class RawGmailInfo:
@@ -41,6 +42,7 @@ class GmailInfo:
         self.sender_email = ""
         self.to = ""
         self.subject = ""
+        self.body = ""
 
 
 def extract_gmail_info(email_info: dict):
@@ -82,7 +84,10 @@ def extract_gmail_info(email_info: dict):
             body = base64.urlsafe_b64decode(parts[0]["body"]["data"]).decode("utf-8")
 
     elif extracted_gmail_info.mime_type == "text/plain" or extracted_gmail_info.mime_type == "text/html":
-        body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
+        if "data" in payload["body"]:
+            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
+        else:
+            logger.warning("no data found in payload body, payload body is {}".format(payload["body"]))
 
     extracted_gmail_info.body = body
 
@@ -139,7 +144,7 @@ class GmailAPIClient:
             ).execute()
 
             for history in response.get('history', []):
-                if "id" in history and int(history["id"]) <= cur_history_id: # only get message range in [pre_history_id, cur_history_id]
+                if int(history["id"]) <= cur_history_id: # only get message range in [pre_history_id, cur_history_id]
                     if "messagesAdded" in history:
                         for message in history['messagesAdded']:
                             new_gmail_message.append(rum_model.GmailNewMessage(

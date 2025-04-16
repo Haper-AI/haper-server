@@ -13,7 +13,7 @@ from biz.controller.gmail_util import extract_gmail_info, GmailAPIClient
 from biz.controller.outlook_util import extract_outlook_info, OutlookAPIClient
 from biz.dal.email import Email, EmailSource
 from biz.dal.report_batch_action import ReportBatchAction, BatchActionRunStatus, MessageActionResult
-from biz.dal.user import Account
+from biz.dal.user import Account, User
 from biz.model import ReportMessagesInQueueFieldName
 from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
@@ -305,6 +305,8 @@ generate_email_reply_prompt_template = ChatPromptTemplate.from_template(
       - Subject: {email_subject}
       - Body: {email_body} 
       
+    Current Username: {username}
+      
     Reply History:
     {reply_history}
     """
@@ -340,6 +342,7 @@ def _search_corresponding_mail_item(messages_by_account: List[report_model.MailM
 # TODO: clean redundant code
 def generate_message_reply(user_id: str, report_id: str, source: str, account_id: str, id: int):
     with get_session(write=False) as session:
+        user = User.get_by_id(session, user_id)
         report = Report.get_by_id(session, report_id)
 
     report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
@@ -393,6 +396,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
             email_sender=corresponding_mail_item.sender,
             email_subject=corresponding_mail_item.subject,
             email_body=extract_gmail.body,
+            username=user.name,
             reply_history=reply_history,
         )
 
@@ -461,6 +465,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
             email_sender=corresponding_mail_item.sender,
             email_subject=corresponding_mail_item.subject,
             email_body=extract_gmail.body,
+            username=user.name,
             reply_history=reply_history,
         )
 

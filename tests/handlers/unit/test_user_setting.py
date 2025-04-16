@@ -68,11 +68,15 @@ class TestGetUserSetting:
             assert response.status_code == 401
 
 
-class TestSetUserSetting:
+class TestCreateUserSetting:
     def test_success(self, client, new_user):
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
         tags = ["Newsletter"]
-        response = client.post("/api/v1/user/setting", json={"key_message_tags": tags})
+        report_max_duration = 10000
+        response = client.post("/api/v1/user/setting", json={
+            "key_message_tags": tags,
+            "report_max_duration": report_max_duration
+        })
 
         assert response.status_code == 200
         assert response.get_json()['data']['setting']['key_message_tags'] == tags
@@ -90,9 +94,14 @@ class TestUpdateUserSetting:
         user, setting = new_user_setting
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
         tags = ["Newsletter"]
-        response = client.put("/api/v1/user/setting", json={"key_message_tags": tags})
+        report_max_duration = 10000
+        response = client.put("/api/v1/user/setting", json={
+            "key_message_tags": tags,
+            "report_max_duration": report_max_duration
+        })
         assert response.status_code == 200
         assert response.get_json()['data']['setting']['key_message_tags'] == tags
+        assert response.get_json()['data']['setting']['report_max_duration'] == report_max_duration
 
     class TestFail:
         def test_fail_by_no_setting(self, client, new_user):

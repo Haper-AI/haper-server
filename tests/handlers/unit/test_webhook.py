@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 
 import pytest
 from cryptography.hazmat.backends import default_backend
@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.padding import PKCS7
 
 from biz.controller.gmail_util import GmailAPIClient
+from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord
 from biz.dal.report import Report
 from biz.service.db import get_session
@@ -28,6 +29,7 @@ def patch_gmail_api():
     mock_gmail_client.users().history().list.return_value.execute.return_value = {
         'history': [
             {
+                'id': "2",
                 'messagesAdded': [
                     {
                         'message': {
@@ -38,6 +40,10 @@ def patch_gmail_api():
                 ]
             }
         ]
+    }
+    mock_gmail_client.users().watch.return_value.execute.return_value = {
+        'historyId': 10,
+        'expiration': (datetime.now() + timedelta(days=7)).timestamp() * 1000,
     }
     mock_credential = MagicMock()
     mock_credential.token = generate_random_string(10)
@@ -56,10 +62,10 @@ class TestGmailSyncWebhook:
         with get_session(write=True) as session:
             MessageTrackingRecord.add(session, user.id, account.id, extra_info={
                 "pre_history_id": "some_history_id",
-                "expiration": int((datetime.now() + timedelta(days=7)).timestamp()),
+                "expiration": int((datetime.now() + timedelta(hours=12)).timestamp()),
             })
-            Report.add(session, user.id, {})
-
+            report = Report.add(session, user.id, {})
+            report.created_at = datetime.now(timezone.utc) - timedelta(days=7, hours=1)
 
         response = client.post('/api/v1/webhook/gmail-sync', json={
             'message': {
@@ -90,20 +96,42 @@ class TestGmailSyncWebhook:
             assert response.status_code == 200
 
 
+@pytest.fixture(scope="module")
+def patch_outlook_api():
+    # configure mock gmail client api
+
+    async def outlook_subscription_patch_mock(*args):
+        return None
+
+    mock_outlook_client = MagicMock()
+    mock_outlook_client.subscriptions.by_subscription_id.return_value.patch = outlook_subscription_patch_mock
+    mock_credential = MagicMock()
+    mock_credential.access_token = generate_random_string(10)
+    mock_credential.refresh_token = generate_random_string(10)
+    mock_credential.expires_at = int((datetime.now() + timedelta(hours=2)).timestamp())
+
+    with patch.object(OutlookAPIClient, "client", create=True, new_callable=PropertyMock) as p1:
+        with patch.object(OutlookAPIClient, "credential", create=True, new_callable=PropertyMock) as p2:
+            p1.return_value = mock_outlook_client
+            p2.return_value = mock_credential
+            yield p1, p2
+
 class TestOutlookSyncWebhook:
     class TestSuccess:
         def test_success_with_validation_token(self, client):
             response = client.post('/api/v1/webhook/outlook-sync?validationToken=someToken')
             assert response.status_code == 200
 
+        @pytest.mark.usefixtures("patch_outlook_api")
         def test_success_with_data(self, client, new_user_outlook_account):
             user, account = new_user_outlook_account
             with get_session(write=True) as session:
                 MessageTrackingRecord.add(session, user.id, account.id, extra_info={
                     "subscription_id": "some_subscription_id",
-                    "expiration": int((datetime.now() + timedelta(days=7)).timestamp()),
+                    "expiration": int((datetime.now() + timedelta(hours=12)).timestamp()),
                 })
-                Report.add(session, user.id, {})
+                report = Report.add(session, user.id, {})
+                report.created_at = datetime.now(timezone.utc) - timedelta(days=7, hours=1)
 
             private_key_str, public_key_str = create_rsa_pairs()
 
@@ -166,7 +194,7 @@ class TestOutlookSyncWebhook:
                 assert response.status_code == 200
 
     class TestFail:
-        def test_fail_by_no_registered_email(self, client):
+        def test_fail_by_not_registered_email(self, client):
             email = generate_random_gmail(8)
             response = client.post('/api/v1/webhook/gmail-sync', json={
                 'message': {
