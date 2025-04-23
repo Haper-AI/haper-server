@@ -12,6 +12,7 @@ from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
 from biz.dal.report import Report
 from biz.dal.user import Account, User
+from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
 from biz.service.db import get_session
 from biz.utils.env import RuntimeEnv
@@ -117,6 +118,9 @@ class TestMessageTrackingStart:
         @pytest.mark.usefixtures("patch_gmail_watch_stop")
         def test_success_by_exist_google_account(self, client, new_user_gmail_account):
             user, account = new_user_gmail_account
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account_id": account.id,
@@ -127,6 +131,9 @@ class TestMessageTrackingStart:
 
         @pytest.mark.usefixtures("patch_gmail_watch_stop")
         def test_success_by_new_google_account(self, client, new_user):
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(new_user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account": {
@@ -156,6 +163,9 @@ class TestMessageTrackingStart:
         @pytest.mark.usefixtures("patch_outlook_subscription_create_delete")
         @pytest.mark.usefixtures("patch_outlook_sub_public_key")
         def test_success_by_exist_outlook_account(self, client, new_user):
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(new_user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account": {

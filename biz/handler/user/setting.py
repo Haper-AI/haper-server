@@ -3,7 +3,7 @@ from flask import request
 from pydantic import BaseModel, PositiveInt, model_validator
 
 from .routes import user_routes
-from biz.handler.middleware import catch_error, jwt_auth
+from biz.handler.middleware import catch_error, user_auth
 from biz.utils.response import HTTPResponse
 from biz.controller import user as user_ctrl
 from biz.controller import user_setting as user_setting_ctrl
@@ -11,7 +11,7 @@ from biz.controller import user_setting as user_setting_ctrl
 
 @user_routes.route('/info')
 @catch_error
-@jwt_auth
+@user_auth()
 def get_user_info():
     resp = HTTPResponse(request.method, request.path)
 
@@ -31,7 +31,7 @@ def get_user_info():
 
 @user_routes.route('/setting')
 @catch_error
-@jwt_auth
+@user_auth()
 def get_user_setting():
     resp = HTTPResponse(request.method, request.path)
     user_setting = user_setting_ctrl.get_user_setting(request.ctx.user_id)
@@ -62,7 +62,7 @@ class CreateUpdateUserSettingReq(BaseModel):
 
 @user_routes.route('/setting', methods=['POST'])
 @catch_error
-@jwt_auth
+@user_auth()
 def new_user_setting():
     resp = HTTPResponse(request.method, request.path)
     req = CreateUpdateUserSettingReq(**request.get_json())
@@ -78,7 +78,7 @@ def new_user_setting():
 
 @user_routes.route('/setting', methods=['PUT'])
 @catch_error
-@jwt_auth
+@user_auth()
 def update_user_setting():
     resp = HTTPResponse(request.method, request.path)
     req = CreateUpdateUserSettingReq(**request.get_json())
@@ -98,7 +98,7 @@ def update_user_setting():
 
 @user_routes.route('', methods=['DELETE'])
 @catch_error
-@jwt_auth
+@user_auth()
 def delete_user():
     resp = HTTPResponse(request.method, request.path)
     user_setting_ctrl.delete_user(request.ctx.user_id)

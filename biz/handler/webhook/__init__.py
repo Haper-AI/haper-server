@@ -4,6 +4,7 @@ import hmac
 import json
 from typing import Dict, List
 
+import stripe
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.ciphers import modes, algorithms, Cipher
@@ -14,8 +15,10 @@ from flask import request
 from flask import Blueprint
 from pydantic import BaseModel, EmailStr, field_validator
 
+from biz.controller import user_subscription as user_subscription_ctrl
 from biz.handler.middleware import catch_error
 from biz.service.aws.sm import get_outlook_sub_private
+from biz.utils.env import RuntimeEnv
 from biz.utils.logger import logger
 from biz.controller import message_sync as message_sync_ctrl
 
@@ -51,6 +54,7 @@ def user_gmail_sync():
     req = GmailPubsubMessage(**(request.get_json().get("message", {})))
     message_sync_ctrl.sync_user_gmail_message(str(req.data.emailAddress), req.data.historyId)
     return "success", 200
+
 
 @webhook_routes.route("/outlook-sync", methods=["POST"])
 @catch_error
@@ -110,6 +114,51 @@ def outlook_sync():
         message_ids_by_email[email].append(v["resourceData"]["id"])
 
     message_sync_ctrl.sync_user_outlook_message(message_ids_by_email)
+    return "success", 200
+
+
+@webhook_routes.route("/stripe-event", methods=["POST"])
+def stripe_event_webhook():
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature")
+    try:
+        event = stripe.Webhook.construct_event(
+            payload,
+            sig_header,
+            RuntimeEnv.Instance().STRIPE_WEBHOOK_SECRET
+        )
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        logger.error(f"Stripe webhook signature verification failed: {e}")
+        return "Invalid signature", 400
+    except Exception as e:
+        # Invalid payload
+        logger.error(f"Stripe webhook error: {e}")
+        return "Invalid payload", 400
+
+    # Handle the event
+    if event["type"] == "customer.subscription.created":
+        logger.info("handle stripe customer.subscription.created")
+        user_subscription_ctrl.handle_customer_subscription_created(event["data"]["object"])
+    elif event["type"] == "customer.subscription.paused":
+        logger.info("handle stripe customer.subscription.paused")
+        user_subscription_ctrl.handle_customer_subscription_paused(event["data"]["object"])
+    elif event["type"] == "customer.subscription.resumed":
+        logger.info("handle stripe customer.subscription.resumed")
+        user_subscription_ctrl.handle_customer_subscription_resumed(event["data"]["object"])
+    elif event["type"] == "customer.subscription.updated":
+        logger.info("handle stripe customer.subscription.updated")
+        user_subscription_ctrl.handle_customer_subscription_update(event["data"]["object"])
+    elif event["type"] == "customer.subscription.deleted":
+        logger.info("handle stripe customer.subscription.deleted")
+        user_subscription_ctrl.handle_customer_subscription_deleted(event["data"]["object"])
+    # elif event["type"] == "customer.subscription.trial_will_end":
+    #     pass
+    # elif event["type"] == "invoice.paid":
+    #     pass
+    # elif event["type"] == "invoice.payment_failed":
+    #     pass
+
     return "success", 200
 
 

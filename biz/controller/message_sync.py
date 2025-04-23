@@ -50,8 +50,9 @@ def sync_user_gmail_message(email: str, history_id: int):
                 expires_at=gmail_api_client.expires_at,
             )
         # call watch if necessary, TODO: move to a cronjob
+        # gmail recommend to call watch once per day: https://developers.google.com/workspace/gmail/api/guides/push#renewing_mailbox_watch
         new_extra_info = tracking_status.extra_info
-        if int((datetime.now() + timedelta(days=2)).timestamp()) > tracking_status.extra_info["expiration"]:
+        if int((datetime.now() + timedelta(days=6)).timestamp()) > tracking_status.extra_info["expiration"]:
             _, expiration = gmail_api_client.watch_gmail()
             new_extra_info["expiration"] = expiration
             logger.info("gmail watch is about to expire, re-watch it")
@@ -134,7 +135,7 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
                 continue
 
             # update subscription if necessary, TODO: move to a cronjob
-            if int((datetime.now() + timedelta(days=2)).timestamp()) > tracking_status.extra_info["expiration"]:
+            if int((datetime.now() + timedelta(days=6)).timestamp()) > tracking_status.extra_info["expiration"]:
                 logger.info("outlook watch is about to expire, re-watch it")
                 outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
                 new_expiration = outlook_api_client.refresh_watch_outlook(tracking_status.extra_info["subscription_id"])

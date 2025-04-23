@@ -1,6 +1,7 @@
 import logging
+import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 
 from kiota_abstractions.api_error import APIError
 from sqlalchemy.orm import make_transient
@@ -45,7 +46,7 @@ def list_user_message_tracking_status(user_id: str):
     return result
 
 
-def start_message_tracking_with_existing_account(user_id: str, account_id: str):
+def start_message_tracking_with_existing_account(user_id: str, account_id: Union[uuid.UUID, str]):
     with get_session(write=True) as session:
         account = Account.get_by_id(session, account_id)
         if not account or str(account.user_id) != user_id:
@@ -161,7 +162,7 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
     }
 
 
-def end_message_tracking(user_id: str, account_id: str):
+def end_message_tracking(user_id: str, account_id: Union[uuid.UUID, str]):
     with get_session(write=True) as session:
         account = Account.get_by_id(session, account_id)
         if not account or str(account.user_id) != user_id:

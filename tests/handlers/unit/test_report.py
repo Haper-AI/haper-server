@@ -15,6 +15,7 @@ from biz.dal.email import Email
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, BatchActionRunStatus
 from biz.dal.user import User, Account
+from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
 from biz.model import ReportMessagesInQueueFieldName
 from biz.service.db import get_session
@@ -773,6 +774,8 @@ class TestGenerateMessageReply:
         user, account, report = new_user_report
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
         with get_session(write=True) as session:
+            UserSubscription.add(session, str(user.id), generate_random_string(20),
+                                 generate_random_string(20), "month", "active")
             Report.update(session, report.id, status=ReportStatus.Finalized)
             session.add_all([
                 Email(

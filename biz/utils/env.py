@@ -61,3 +61,7 @@ class RuntimeEnv:
         self.OUTLOOK_SYNC_WEBHOOK_URL = os.getenv("OUTLOOK_SYNC_WEBHOOK_URL")
         self.MICROSOFT_CERTIFICATE_KEY_ID = os.getenv("MICROSOFT_CERTIFICATE_KEY_ID")
 
+        # stripe
+        self.STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
+        self.STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+        self.STRIPE_SUBSCRIPTION_TRIAL_DAYS = int(os.getenv("STRIPE_SUBSCRIPTION_TRIAL_DAYS"))
