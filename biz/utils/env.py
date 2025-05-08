@@ -45,6 +45,7 @@ class RuntimeEnv:
         self.SQS_REGION = os.getenv("SQS_REGION")
         self.SQS_ENDPOINT = os.getenv("SQS_ENDPOINT")
         self.SQS_REPORT_ASYNC_ACTION_QUEUE_URL = os.getenv("SQS_REPORT_ASYNC_ACTION_QUEUE_URL")
+        self.SQS_MAX_RETRIES = int(os.getenv("SQS_MAX_RETRIES"))
 
         ## aws secret manager
         self.AWS_SM_REGION = os.getenv("AWS_SM_REGION")

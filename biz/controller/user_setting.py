@@ -6,7 +6,7 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.controller.report import end_reporting_sequence
 from biz.dal.user import AccountProvider
-from biz.dal.message_tracking import MessageTrackingStatus, MessageTrackingRecord
+from biz.dal.message_tracking import MessageTrackingStatus, MessageTrackingRecord, MessageTrackingStatusExtraInfoKeys
 from biz.dal.user import Account, User
 from biz.dal.user_setting import UserSetting
 from biz.service.db import get_session
@@ -21,20 +21,22 @@ def get_user_setting(user_id: str):
     return user_setting
 
 
-def new_user_setting(user_id: str, key_message_tags: Optional[List[str]]=None, report_max_duration: Optional[int]=None):
-    with get_session(write=True) as session:
-        user_setting = UserSetting.get_by_user_id(session, user_id)
-        if user_setting:
-            raise ResponseCode.UnsupportedAction.create_error("user setting already exist")
+# def new_user_setting(user_id: str, key_message_tags: Optional[List[str]] = None,
+#                      report_max_duration: Optional[int] = None):
+#     with get_session(write=True) as session:
+#         user_setting = UserSetting.get_by_user_id(session, user_id)
+#         if user_setting:
+#             raise ResponseCode.UnsupportedAction.create_error("user setting already exist")
+#
+#         user_setting = UserSetting.add(session, user_id, key_message_tags, report_max_duration)
+#
+#         make_transient(user_setting)
+#
+#     return user_setting
 
-        user_setting = UserSetting.add(session, user_id, key_message_tags, report_max_duration)
 
-        make_transient(user_setting)
-
-    return user_setting
-
-
-def update_user_setting(user_id: str, key_message_tags: Optional[List[str]]=None, report_max_duration: Optional[int]=None):
+def update_user_setting(user_id: str, key_message_tags: Optional[List[str]] = None,
+                        report_max_duration: Optional[int] = None):
     with get_session(write=True) as session:
         user_setting = UserSetting.get_by_user_id(session, user_id)
         if not user_setting:
@@ -69,7 +71,8 @@ def delete_user(user_id: str):
                         account.refresh_token,
                         account.expires_at
                     )
-                    msgraph_api_client.stop_watch_outlook(t.extra_info["subscription_id"])
+                    msgraph_api_client.stop_watch_outlook(
+                        t.extra_info[MessageTrackingStatusExtraInfoKeys.SubscriptionID])
 
                 MessageTrackingRecord.update(session, t.user_id, t.account_id, status=MessageTrackingStatus.STOPPED)
             except Exception as e:

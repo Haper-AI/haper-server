@@ -17,7 +17,7 @@ from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, 
 from biz.dal.user import User, Account
 from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
-from biz.model import ReportMessagesInQueueFieldName
+from biz.model import ReportFieldName
 from biz.service.db import get_session
 from biz.model.report import report as report_model
 from biz.model.report import rich_text as rich_text_model
@@ -365,7 +365,7 @@ class TestPollMessageProcessingStatus:
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
             response = client.post("/api/v1/report/{}/message-processing-status".format(report.id))
             with get_session(write=True) as session:
-                Report.update_content_subfield(session, report.id, ReportMessagesInQueueFieldName, {"gmail": 0})
+                Report.update_content_subfield(session, report.id, ReportFieldName.MessagesInQueue, {"gmail": 0})
             assert response.status_code == 200
             assert 'text/event-stream' in response.headers['Content-Type']
             assert response.data

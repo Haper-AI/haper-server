@@ -22,6 +22,7 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 from tests.handlers.unit.conftest import create_rsa_pairs
 
+
 @pytest.fixture(scope="module")
 def patch_gmail_api():
     # configure mock gmail client api
@@ -55,17 +56,17 @@ def patch_gmail_api():
             p2.return_value = mock_credential
             yield p1, p2
 
+
 class TestGmailSyncWebhook:
     @pytest.mark.usefixtures("patch_gmail_api")
     def test_success(self, client, new_user_gmail_account):
         user, account = new_user_gmail_account
         with get_session(write=True) as session:
-            MessageTrackingRecord.add(session, user.id, account.id, extra_info={
+            MessageTrackingRecord.add(session, user.id, account.id, account.provider, extra_info={
                 "pre_history_id": "some_history_id",
                 "expiration": int((datetime.now() + timedelta(hours=12)).timestamp()),
             })
-            report = Report.add(session, user.id, {})
-            report.created_at = datetime.now(timezone.utc) - timedelta(days=7, hours=1)
+            Report.add(session, user.id, {})
 
         response = client.post('/api/v1/webhook/gmail-sync', json={
             'message': {
@@ -116,6 +117,7 @@ def patch_outlook_api():
             p2.return_value = mock_credential
             yield p1, p2
 
+
 class TestOutlookSyncWebhook:
     class TestSuccess:
         def test_success_with_validation_token(self, client):
@@ -126,12 +128,11 @@ class TestOutlookSyncWebhook:
         def test_success_with_data(self, client, new_user_outlook_account):
             user, account = new_user_outlook_account
             with get_session(write=True) as session:
-                MessageTrackingRecord.add(session, user.id, account.id, extra_info={
+                MessageTrackingRecord.add(session, user.id, account.id, account.provider, extra_info={
                     "subscription_id": "some_subscription_id",
                     "expiration": int((datetime.now() + timedelta(hours=12)).timestamp()),
                 })
-                report = Report.add(session, user.id, {})
-                report.created_at = datetime.now(timezone.utc) - timedelta(days=7, hours=1)
+                Report.add(session, user.id, {})
 
             private_key_str, public_key_str = create_rsa_pairs()
 

@@ -127,7 +127,7 @@ class OutlookAPIClient:
         return subscription_id, int(watch_expires_at.timestamp())
 
     def refresh_watch_outlook(self, subscription_id: str):
-        watch_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10070)
+        watch_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10070) # 10 minutes less than 1 week
         request_body = Subscription(
             expiration_date_time=watch_expires_at,
         )

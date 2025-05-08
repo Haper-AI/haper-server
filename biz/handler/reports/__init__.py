@@ -8,7 +8,7 @@ from pydantic import BaseModel, PositiveInt
 from biz.controller import report as report_ctrl
 from biz.dal.report_batch_action import BatchActionRunStatus
 from biz.handler.middleware import catch_error, user_auth
-from biz.model import ReportMessagesInQueueFieldName
+from biz.model import ReportFieldName
 from biz.service.rate_limiter import user_limiter
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse
@@ -132,7 +132,7 @@ def poll_message_processing_status(pre_status: dict, report_id: str):
 def message_processing_status(report_id: str):
     report = report_ctrl.get_report_by_id(request.ctx.user_id, report_id)
 
-    return Response(poll_message_processing_status(report.content.get(ReportMessagesInQueueFieldName, {}), report_id),
+    return Response(poll_message_processing_status(report.content.get(ReportFieldName.MessagesInQueue, {}), report_id),
                     content_type="text/event-stream")
 
 

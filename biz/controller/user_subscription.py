@@ -171,7 +171,7 @@ def handle_customer_subscription_deleted(subscription):
     # Update the existing subscription in the database
 
     with get_session(write=True) as session:
-        UserSubscription.delete_by_strip_customer_id(session, stripe_customer_id)
+        UserSubscription.delete_by_stripe_customer_id(session, stripe_customer_id)
 
 # def handle_invoice_paid(invoice):
 #     """

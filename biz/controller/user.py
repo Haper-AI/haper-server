@@ -8,6 +8,7 @@ from psycopg.errors import UniqueViolation
 from sqlalchemy.exc import IntegrityError
 
 from biz.dal.user import AccountProvider
+from biz.dal.user_setting import UserSetting, DEFAULT_REPORT_MAX_TIME_DURATION
 from biz.service.db import get_session
 from biz.dal.user import User, Account
 from biz.utils.response import ResponseCode
@@ -61,6 +62,7 @@ def signup_user_by_credential(email: str, password: str):
         hashed_password = hash_password(password)
 
         user = User.add(session, name, email, password=hashed_password)
+        UserSetting.add(session, user.id, [], DEFAULT_REPORT_MAX_TIME_DURATION)
         make_transient(user)
     return user
 
@@ -88,6 +90,7 @@ def signup_user_by_oauth(provider: str, provider_account_id: str, email: str,
                 raise e
         account = Account.add(session, user.id, provider, provider_account_id,
                               access_token, refresh_token, expires_at, email)
+        UserSetting.add(session, user.id, [], DEFAULT_REPORT_MAX_TIME_DURATION)
         make_transient(user), make_transient(account)
     return user, account
 

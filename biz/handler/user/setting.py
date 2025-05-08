@@ -49,7 +49,7 @@ def get_user_setting():
     return resp.return_with_log()
 
 
-class CreateUpdateUserSettingReq(BaseModel):
+class UpdateUserSettingReq(BaseModel):
     key_message_tags: Optional[List[str]] = None
     report_max_duration: Optional[PositiveInt] = None
 
@@ -60,20 +60,20 @@ class CreateUpdateUserSettingReq(BaseModel):
         return self
 
 
-@user_routes.route('/setting', methods=['POST'])
-@catch_error
-@user_auth()
-def new_user_setting():
-    resp = HTTPResponse(request.method, request.path)
-    req = CreateUpdateUserSettingReq(**request.get_json())
-    user_setting = user_setting_ctrl.new_user_setting(request.ctx.user_id, req.key_message_tags)
-    resp.set_data({
-        "setting": {
-            "key_message_tags": user_setting.key_message_tags,
-            "report_max_duration": user_setting.report_max_duration,
-        },
-    })
-    return resp.return_with_log()
+# @user_routes.route('/setting', methods=['POST'])
+# @catch_error
+# @user_auth()
+# def new_user_setting():
+#     resp = HTTPResponse(request.method, request.path)
+#     req = CreateUpdateUserSettingReq(**request.get_json())
+#     user_setting = user_setting_ctrl.new_user_setting(request.ctx.user_id, req.key_message_tags)
+#     resp.set_data({
+#         "setting": {
+#             "key_message_tags": user_setting.key_message_tags,
+#             "report_max_duration": user_setting.report_max_duration,
+#         },
+#     })
+#     return resp.return_with_log()
 
 
 @user_routes.route('/setting', methods=['PUT'])
@@ -81,7 +81,7 @@ def new_user_setting():
 @user_auth()
 def update_user_setting():
     resp = HTTPResponse(request.method, request.path)
-    req = CreateUpdateUserSettingReq(**request.get_json())
+    req = UpdateUserSettingReq(**request.get_json())
     user_setting = user_setting_ctrl.update_user_setting(
         request.ctx.user_id,
         req.key_message_tags,

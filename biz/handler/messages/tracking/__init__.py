@@ -85,7 +85,7 @@ class EndMessageTrackingReq(BaseModel):
 def stop_message_tracking():
     resp = HTTPResponse(request.method, request.path)
     req = EndMessageTrackingReq(**request.get_json())
-    record = message_tracking_ctrl.end_message_tracking(request.ctx.user_id, req.account_id)
+    record = message_tracking_ctrl.stop_message_tracking(request.ctx.user_id, req.account_id)
     resp.set_data({
         "new_tracking_status": record
     })

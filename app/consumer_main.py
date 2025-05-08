@@ -220,8 +220,6 @@ def init():
     init_db()
     init_sqs()
 
-MESSAGE_PROCESSING_MAX_RETRIES = 5
-
 if __name__ == '__main__':
     logger.info('Agent service starting up...')
     init()
@@ -266,7 +264,7 @@ if __name__ == '__main__':
                     logger.error(f"Error processing message: {message['MessageId']}, error: {e}")
 
                     # release message by change visibility timeout or leave it to the dead letter queue
-                    if receive_count >= MESSAGE_PROCESSING_MAX_RETRIES:
+                    if receive_count >= RuntimeEnv.Instance().SQS_MAX_RETRIES:
                         logger.error(f"Message {message['MessageId']} exceeded max retries, moving to dead letter queue")
                     else:
                         get_sqs_client().change_message_visibility(

@@ -102,5 +102,5 @@ class UserSubscription(Base):
         return session.query(cls).filter_by(stripe_customer_id=stripe_customer_id).first()
 
     @classmethod
-    def delete_by_strip_customer_id(cls, session: Session, stripe_customer_id: str):
+    def delete_by_stripe_customer_id(cls, session: Session, stripe_customer_id: str):
         session.query(cls).filter_by(stripe_customer_id=stripe_customer_id).delete()

@@ -146,13 +146,11 @@ class Account(Base):
     )
     provider = Column(
         String(16),
-        primary_key=False,
         nullable=False,
         comment='The OAuth provider, like google, discord, etc.'
     )
     provider_account_id = Column(
         Text,
-        primary_key=False,
         nullable=False,
         comment='The unique account ID of the user for the provider'
     )

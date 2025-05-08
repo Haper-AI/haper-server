@@ -16,6 +16,12 @@ class MessageTrackingStatus(str, PyEnum):
     ERROR = "Error"
 
 
+class MessageTrackingStatusExtraInfoKeys(str, PyEnum):
+    Expiration = "expiration"
+    SubscriptionID = "subscription_id"
+    PreHistoryID = "pre_history_id"
+
+
 class MessageTrackingRecord(Base):
     __tablename__ = 'message_tracking_records'
     __table_args__ = {'comment': 'Message tracking status of a particular user'}
@@ -33,6 +39,11 @@ class MessageTrackingRecord(Base):
         nullable=False,
         primary_key=True,
         comment="References the accounts table id field"
+    )
+    account_provider = Column(
+        String(16),
+        nullable=False,
+        comment='The OAuth provider, like google, discord, etc. Duplicated filed from accounts table'
     )
     status = Column(
         String(16),
@@ -60,11 +71,12 @@ class MessageTrackingRecord(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID],
+    def add(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID], account_provider: str,
             extra_info: Optional[dict] = None):
         record = cls(
             user_id=user_id,
             account_id=account_id,
+            account_provider=account_provider,
             status=MessageTrackingStatus.ONGOING,
             extra_info=extra_info
         )
@@ -83,8 +95,12 @@ class MessageTrackingRecord(Base):
         return session.query(cls).filter_by(user_id=user_id, status=MessageTrackingStatus.ONGOING).count()
 
     @classmethod
-    def get_by_user_id_and_account_id(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID]):
-        return session.query(cls).filter_by(user_id=user_id, account_id=account_id).first()
+    def get_by_user_id_and_account_id(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID],
+                                      for_update: bool = False):
+        q = session.query(cls).filter_by(user_id=user_id, account_id=account_id)
+        if for_update:
+            q = q.with_for_update()
+        return q.first()
 
     @classmethod
     def update(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID],
@@ -98,3 +114,10 @@ class MessageTrackingRecord(Base):
 
         if updates:
             session.query(cls).filter_by(user_id=user_id, account_id=account_id).update(updates)
+
+    @classmethod
+    def update_extra_info_subfield(cls, session: Session, user_id: Union[str, UUID], account_id: Union[str, UUID],
+                                   extra_info_key: str, extra_info_value: Union[str, int]):
+        session.query(cls).filter_by(user_id=user_id, account_id=account_id).update({
+            cls.extra_info: func.jsonb_set(cls.extra_info, [extra_info_key], func.to_jsonb(extra_info_value))
+        })

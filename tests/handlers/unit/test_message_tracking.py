@@ -27,7 +27,7 @@ def new_user_gmail_tracking_record():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
-        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
+        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), account.provider, extra_info={
             "some_info_key": "some_info_value"
         })
         Report.add(session, user.id, {})
@@ -42,7 +42,7 @@ def new_user_outlook_tracking_record():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = db_add_new_account(session, user.id, email, provider=AccountProvider.Microsoft)
-        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
+        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), account.provider, extra_info={
             "subscription_id": str(uuid.uuid4()),
         })
         Report.add(session, user.id, {})
@@ -57,7 +57,7 @@ def patch_gmail_watch_stop():
     mock_gmail_client = MagicMock()
     mock_gmail_client.users().watch.return_value.execute.return_value = {
         'historyId': '123',
-        'expiration': int((datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp()),
+        'expiration': (datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp() * 1000,
     }
     mock_gmail_client.users().stop.return_value.execute.return_value = {}
 
