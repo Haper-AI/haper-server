@@ -172,3 +172,5 @@ tests
 README.md
 Dockerfile
 .dockerignore
+script
+docker

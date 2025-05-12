@@ -1,8 +1,5 @@
 import logging
 
-from flask import Flask
-from flask.logging import default_handler
-
 from .env import RuntimeEnv
 
 nameToLevel = {
@@ -20,6 +17,3 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 logger.addHandler(ch)
-
-def config_logger(app: Flask):
-    app.logger.removeHandler(default_handler)

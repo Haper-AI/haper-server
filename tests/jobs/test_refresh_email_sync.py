@@ -8,7 +8,6 @@ from app.jobs.refresh_email_sync import init_job, job_main
 from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatusExtraInfoKeys
-from biz.dal.report import Report
 from biz.dal.user import User, Account, AccountProvider
 from biz.service.db import get_session
 from tests import generate_random_gmail, generate_random_string

@@ -117,6 +117,16 @@ class User(Base):
 
         session.query(cls).filter_by(id=user_id).update(updates)
 
+    @classmethod
+    def delete(cls, session: Session, user_id: Union[str, UUID]):
+        """
+        Delete a user by their ID from the database.
+
+        :param session: SQLAlchemy session instance
+        :param user_id: UUID of the user to delete
+        """
+        session.query(cls).filter_by(id=user_id).delete()
+
 
 
 class AccountProvider(str, Enum):

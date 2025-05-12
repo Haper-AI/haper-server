@@ -54,18 +54,22 @@ class Report(Base):
         nullable=False,
         comment='JSONB content of the report, storing structured data'
     )
-    finalized_at = Column(
-        TIMESTAMP(timezone=True),
-        comment='Timestamp when the report was finalized'
-    )
-    deleted_at = Column(
-        TIMESTAMP(timezone=True),
-        comment='Timestamp when the report was marked as deleted by the user'
-    )
     created_at = Column(
         TIMESTAMP(timezone=True),
         server_default=func.now(),
         comment='Timestamp when the report was created'
+    )
+    finalized_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was finalized'
+    )
+    last_access_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was last read by the user'
+    )
+    deleted_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was marked as deleted by the user'
     )
     updated_at = Column(
         TIMESTAMP(timezone=True),
@@ -87,7 +91,7 @@ class Report(Base):
 
     @classmethod
     def update(cls, session: Session, report_id: Union[str, UUID],
-               status: ReportStatus = None, content: Dict = None):
+               status: ReportStatus = None, content: Dict = None, update_last_access_at: bool = False):
         updates = {}
         if status:
             updates['status'] = status
@@ -95,6 +99,8 @@ class Report(Base):
                 updates['finalized_at'] = func.now()
         if content:
             updates['content'] = content
+        if update_last_access_at:
+            updates['last_access_at'] = func.now()
         session.query(cls).filter_by(id=report_id).update(updates)
 
     @classmethod

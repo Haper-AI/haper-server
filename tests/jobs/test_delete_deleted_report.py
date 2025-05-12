@@ -1,7 +1,5 @@
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy.orm import make_transient
-
 from app.jobs.delete_marked_deleted_report import init_job, job_main
 from biz.dal.report import Report
 from biz.dal.user import User

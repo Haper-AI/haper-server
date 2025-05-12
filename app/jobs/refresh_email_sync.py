@@ -32,7 +32,6 @@ def job_main():
                         account = Account.get_by_id(session, record.account_id)
                         gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token,
                                                           account.expires_at)
-                        new_extra_info = record.extra_info
                         _, new_expiration = gmail_api_client.watch_gmail()
                         # update db
                         # TODO: there maybe some concurrent update problem with message sync
@@ -78,6 +77,6 @@ def job_main():
         offset += len(message_tracking_records)
 
 
-if __name__ == '__main__':
+def handler(event, context):
     init_job()
     job_main()

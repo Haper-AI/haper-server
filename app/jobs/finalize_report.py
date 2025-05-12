@@ -40,7 +40,7 @@ def job_main():
             user_setting = user_setting_by_user_id.get(user_id)
             if user_setting and report.created_at + timedelta(seconds=user_setting.report_max_duration) <= datetime.now(
                     timezone.utc):
-                # finalize the report
+                # finalize the report, TODO: handle empty report content
                 with get_session(write=True) as session:
                     Report.update(session, report.id, status=ReportStatus.Finalized)
                     Report.add(session, report.user_id, {})
@@ -56,6 +56,6 @@ def job_main():
 
 
 # TODO: not run by recurring, create a one-time eventbus schedule when a new report is created
-if __name__ == '__main__':
+def handler(event, context):
     init_job()
     job_main()

@@ -2,7 +2,6 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 
 import requests
-from msgraph.generated.models import outlook_item
 from msgraph.generated.models.body_type import BodyType
 from msgraph.generated.models.email_address import EmailAddress
 from msgraph.generated.models.item_body import ItemBody

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import Literal, List, Optional, Dict
 
 from googleapiclient.errors import HttpError
@@ -73,15 +74,20 @@ def list_history_reports(user_id: str, page: int, page_size: int):
     return reports, count
 
 
-def get_report_by_id(user_id: str, report_id: str):
-    with get_session(write=False) as session:
+def get_report_by_id(user_id: str, report_id: str, for_access: bool = False):
+    with get_session(write=for_access) as session:
         report = Report.get_by_id(session, report_id)
 
-    if not report or report.deleted_at:
-        raise ResponseCode.ResourceNotFound.create_error("report not found")
+        if not report or report.deleted_at:
+            raise ResponseCode.ResourceNotFound.create_error("report not found")
 
-    if str(report.user_id) != user_id:
-        raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+        if str(report.user_id) != user_id:
+            raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+
+        if for_access:
+            Report.update(session, report.id, update_last_access_at=True)
+            report.last_access_at = datetime.now(timezone.utc)
+            make_transient(report)
     return report
 
 

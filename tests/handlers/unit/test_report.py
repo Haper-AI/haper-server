@@ -597,6 +597,8 @@ class TestReportBatchAction:
         user, _, report = new_user_report
         with get_session(write=True) as session:
             Report.update(session, report.id, status=ReportStatus.Finalized)
+            UserSubscription.add(session, str(user.id), generate_random_string(20),
+                                 generate_random_string(20), "month", "active")
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
         response = client.post("/api/v1/report/{}/batch-action".format(report.id))
@@ -609,8 +611,17 @@ class TestReportBatchAction:
             response = client.post("/api/v1/report/{}/batch-action".format(report.id))
             assert response.status_code == 400
 
+        def test_fail_with_no_subscription(self, client, new_user_report):
+            user, _, report = new_user_report
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.post("/api/v1/report/{}/batch-action".format(report.id))
+            assert response.status_code == 400
+
         def test_fail_with_invalid_report_status(self, client, new_user_report):
             user, _, report = new_user_report
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
             response = client.post("/api/v1/report/{}/batch-action".format(report.id))
             assert response.status_code == 400

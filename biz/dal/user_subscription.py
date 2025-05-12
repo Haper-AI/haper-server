@@ -25,7 +25,6 @@ class UserSubscription(Base):
 
     stripe_customer_id = Column(
         String(128),
-        nullable=False,
         comment="Stripe Customer ID",
     )
 
