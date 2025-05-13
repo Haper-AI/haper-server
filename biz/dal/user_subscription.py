@@ -7,10 +7,13 @@ from sqlalchemy.orm import Session
 
 from .base import Base
 
+
 class UserSubscriptionStatus(str, Enum):
     """Enum for user subscription status."""
     Active = "active"
     Trialing = "trialing"
+    Paused = "paused"
+
 
 class UserSubscription(Base):
     __tablename__ = "user_subscriptions"
@@ -84,7 +87,8 @@ class UserSubscription(Base):
         return record
 
     @classmethod
-    def update(cls, session: Session, user_id: Union[UUID, str], subscription_status: str = None, subscription_cycle: str = None):
+    def update(cls, session: Session, user_id: Union[UUID, str], subscription_status: str = None,
+               subscription_cycle: str = None):
         updates = {}
         if subscription_status:
             updates["subscription_status"] = subscription_status

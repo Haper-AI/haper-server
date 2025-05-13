@@ -8,7 +8,7 @@ from app.jobs.refresh_email_sync import handler as refresh_email_sync_handler
 class JobType(str, Enum):
     DeleteMarkedDeletedReport = "DeleteMarkedDeletedReport"
     DeleteMarkedDeletedUser = "DeleteMarkedDeletedUser"
-    FinalizedReport = "FinalizedReport"
+    FinalizeReport = "FinalizeReport"
     RefreshEmailSync = "RefreshEmailSync"
 
 
@@ -18,7 +18,7 @@ def handler(event, context):
         delete_marked_deleted_report_handler(event, context)
     elif job_type == JobType.DeleteMarkedDeletedUser:
         delete_marked_deleted_user_handler(event, context)
-    elif job_type == JobType.FinalizedReport:
+    elif job_type == JobType.FinalizeReport:
         finalize_report_handler(event, context)
     elif job_type == JobType.RefreshEmailSync:
         refresh_email_sync_handler(event, context)

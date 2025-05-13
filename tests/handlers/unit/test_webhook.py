@@ -5,6 +5,7 @@ import json
 from datetime import timedelta, datetime, timezone
 
 import pytest
+import stripe
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
@@ -16,7 +17,11 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord
 from biz.dal.report import Report
+from biz.dal.user import User
+from biz.dal.user_subscription import UserSubscription, UserSubscriptionStatus
+from biz.handler.middleware import gen_jwt_auth
 from biz.service.db import get_session
+from biz.utils.env import RuntimeEnv
 from tests import generate_random_string, generate_random_gmail
 from unittest.mock import patch, MagicMock, PropertyMock
 
@@ -207,4 +212,171 @@ class TestOutlookSyncWebhook:
                     'publish_time': "test_publish_time",
                 }
             })
+            assert response.status_code == 200
+
+
+class TestStripeEventWebhook:
+    class TestSuccess:
+        def test_customer_subscription_created(self, client, new_user):
+            # Mock the Stripe API response
+            event = {
+                "type": "customer.subscription.created",
+                "data": {
+                    "object": {
+                        "id": "sub_test_123",
+                        "customer": "cus_test_123",
+                        "status": "active",
+                        "trial_end": int((datetime.now(timezone.utc) + timedelta(days=7)).timestamp()),
+                        "items": {
+                            "object": "list",
+                            "data": [
+                                {
+                                    "id": "si_test_123",
+                                    "plan": {
+                                        "id": "plan_test_123",
+                                        "interval": "month",
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+            stripe.Webhook.construct_event = MagicMock(return_value=event)
+            stripe.Customer.retrieve = MagicMock(return_value={
+                "email": new_user.email,
+            })
+
+            # Simulate a request to the checkout session endpoint
+            response = client.post('/api/v1/webhook/stripe-event', json=event, headers={
+                "Stripe-Signature": "t=1234567890,v1=1234567890,v0=1234567890"
+            })
+
+            # Assert the response
+            assert response.status_code == 200
+
+        def test_customer_subscription_paused(self, client, new_user):
+            customer_id = "cus_test_123"
+            subscription_id = "sub_test_123"
+            with get_session(write=True) as session:
+                User.update(session, new_user.id, stripe_customer_id=customer_id)
+                UserSubscription.add(session, new_user.id, customer_id, subscription_id, "month",
+                                     UserSubscriptionStatus.Active)
+
+            # Mock the Stripe API response
+            event = {
+                "type": "customer.subscription.paused",
+                "data": {
+                    "object": {
+                        "id": subscription_id,
+                        "customer": customer_id,
+                        "status": "paused",
+                    }
+                }
+            }
+            stripe.Webhook.construct_event = MagicMock(return_value=event)
+
+            # Simulate a request to the checkout session endpoint
+            response = client.post('/api/v1/webhook/stripe-event', json=event, headers={
+                "Stripe-Signature": "t=1234567890,v1=1234567890,v0=1234567890"
+            })
+
+            # Assert the response
+            assert response.status_code == 200
+
+
+        def test_customer_subscription_resumed(self, client, new_user):
+            customer_id = "cus_test_123"
+            subscription_id = "sub_test_123"
+            with get_session(write=True) as session:
+                User.update(session, new_user.id, stripe_customer_id=customer_id)
+                UserSubscription.add(session, new_user.id, customer_id, subscription_id, "month",
+                                     UserSubscriptionStatus.Paused)
+
+            # Mock the Stripe API response
+            event = {
+                "type": "customer.subscription.resumed",
+                "data": {
+                    "object": {
+                        "id": subscription_id,
+                        "customer": customer_id,
+                        "status": "active",
+                    }
+                }
+            }
+            stripe.Webhook.construct_event = MagicMock(return_value=event)
+
+            # Simulate a request to the checkout session endpoint
+            response = client.post('/api/v1/webhook/stripe-event', json=event, headers={
+                "Stripe-Signature": "t=1234567890,v1=1234567890,v0=1234567890"
+            })
+
+            # Assert the response
+            assert response.status_code == 200
+
+        def test_customer_subscription_updated(self, client, new_user):
+            customer_id = "cus_test_123"
+            subscription_id = "sub_test_123"
+            with get_session(write=True) as session:
+                User.update(session, new_user.id, stripe_customer_id=customer_id)
+                UserSubscription.add(session, new_user.id, customer_id, subscription_id, "month",
+                                     UserSubscriptionStatus.Trialing)
+
+            # Mock the Stripe API response
+            event = {
+                "type": "customer.subscription.updated",
+                "data": {
+                    "object": {
+                        "id": subscription_id,
+                        "customer": customer_id,
+                        "status": "active",
+                        "items": {
+                            "data": [
+                                {
+                                    "plan": {
+                                        "interval": "month",
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+            stripe.Webhook.construct_event = MagicMock(return_value=event)
+
+            # Simulate a request to the checkout session endpoint
+            response = client.post('/api/v1/webhook/stripe-event', json=event, headers={
+                "Stripe-Signature": "t=1234567890,v1=1234567890,v0=1234567890"
+            })
+
+            # Assert the response
+            assert response.status_code == 200
+
+        def test_customer_subscription_deleted(self, client, new_user):
+            customer_id = "cus_test_123"
+            subscription_id = "sub_test_123"
+            with get_session(write=True) as session:
+                User.update(session, new_user.id, stripe_customer_id=customer_id)
+                UserSubscription.add(session, new_user.id, customer_id, subscription_id, "month",
+                                     UserSubscriptionStatus.Active)
+
+            # Mock the Stripe API response
+            event = {
+                "type": "customer.subscription.deleted",
+                "data": {
+                    "object": {
+                        "id": subscription_id,
+                        "customer": customer_id,
+                        "status": "canceled",
+                    }
+                }
+            }
+            stripe.Webhook.construct_event = MagicMock(return_value=event)
+
+            # Simulate a request to the checkout session endpoint
+            response = client.post('/api/v1/webhook/stripe-event', json=event, headers={
+                "Stripe-Signature": "t=1234567890,v1=1234567890,v0=1234567890"
+            })
+
+            # Assert the response
             assert response.status_code == 200

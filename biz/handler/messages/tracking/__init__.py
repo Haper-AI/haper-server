@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 
-from flask import Blueprint, request
+from flask import Blueprint, request, Flask
 from pydantic import BaseModel, PositiveInt, model_validator
 
 from biz.controller import message_tracking as message_tracking_ctrl

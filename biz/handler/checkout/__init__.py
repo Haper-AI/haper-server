@@ -50,6 +50,9 @@ def get_checkout_session_status():
     resp = HTTPResponse(request.method, request.path)
     req = GetCheckoutSessionStatusReq(**request.args.to_dict())
     checkout_session = stripe.checkout.Session.retrieve(req.session_id)
+    # TODO: decide whether to check the email
+    # if request.ctx.user_email != checkout_session.customer_details.email:
+    #     raise
     resp.set_data({
         "checkout_status": checkout_session.status,
         "customer_email": checkout_session.customer_details.email,

@@ -81,5 +81,7 @@ def delete_user(user_id: str):
         # end report sequence
         end_reporting_sequence(session, user_id)
 
+        # TODO: revoke tokens for oauth providers: https://developers.google.com/identity/protocols/oauth2/web-server?authuser=2&hl=en#tokenrevoke
+
         # mark user as delete
         User.mark_deleted(session, user_id)
