@@ -1,6 +1,7 @@
 import logging
+import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Union
 
 from kiota_abstractions.api_error import APIError
 from sqlalchemy.orm import make_transient
@@ -9,7 +10,7 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.controller.report import start_new_reporting_sequence, end_reporting_sequence
 from biz.dal.user import AccountProvider
-from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
+from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus, MessageTrackingStatusExtraInfoKeys
 from biz.dal.user import Account
 from biz.service.db import get_session
 from biz.utils.response import ResponseCode
@@ -45,7 +46,7 @@ def list_user_message_tracking_status(user_id: str):
     return result
 
 
-def start_message_tracking_with_existing_account(user_id: str, account_id: str):
+def start_message_tracking_with_existing_account(user_id: str, account_id: Union[uuid.UUID, str]):
     with get_session(write=True) as session:
         account = Account.get_by_id(session, account_id)
         if not account or str(account.user_id) != user_id:
@@ -57,7 +58,7 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
 
         if not tracking_record:
             # insert tracking record to db if not exist
-            tracking_record = MessageTrackingRecord.add(session, user_id, account_id)
+            tracking_record = MessageTrackingRecord.add(session, user_id, account_id, account.provider)
         else:
             MessageTrackingRecord.update(session, tracking_record.user_id, tracking_record.account_id,
                                          status=MessageTrackingStatus.ONGOING)
@@ -71,8 +72,8 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
         if account.provider == AccountProvider.Google:
             gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
             history_id, expiration = gmail_api_client.watch_gmail()
-            extra_info['pre_history_id'] = history_id
-            extra_info['expiration'] = expiration
+            extra_info[MessageTrackingStatusExtraInfoKeys.PreHistoryID] = history_id
+            extra_info[MessageTrackingStatusExtraInfoKeys.Expiration] = expiration
             if gmail_api_client.access_token != account.access_token:
                 Account.update(
                     session,
@@ -83,8 +84,8 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: str):
         elif account.provider == AccountProvider.Microsoft:
             outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
             subscription_id, expiration = outlook_api_client.watch_outlook()
-            extra_info['expiration'] = expiration
-            extra_info['subscription_id'] = subscription_id
+            extra_info[MessageTrackingStatusExtraInfoKeys.Expiration] = expiration
+            extra_info[MessageTrackingStatusExtraInfoKeys.SubscriptionID] = subscription_id
 
             if outlook_api_client.access_token != account.access_token:
                 Account.update(
@@ -134,16 +135,17 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
         if provider == AccountProvider.Google:
             gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
             history_id, expiration = gmail_api_client.watch_gmail()
-            extra_info['expiration'] = expiration
-            extra_info['pre_history_id'] = history_id
+            extra_info[MessageTrackingStatusExtraInfoKeys.Expiration] = expiration
+            extra_info[MessageTrackingStatusExtraInfoKeys.PreHistoryID] = history_id
         elif provider == AccountProvider.Microsoft:
             outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
             subscription_id, expiration = outlook_api_client.watch_outlook()
-            extra_info['expiration'] = expiration
-            extra_info['subscription_id'] = subscription_id
+            extra_info[MessageTrackingStatusExtraInfoKeys.Expiration] = expiration
+            extra_info[MessageTrackingStatusExtraInfoKeys.SubscriptionID] = subscription_id
 
         # create tracking record
-        tracking_record = MessageTrackingRecord.add(session, user_id, account.id, extra_info=extra_info)
+        tracking_record = MessageTrackingRecord.add(session, user_id, account.id, account.provider,
+                                                    extra_info=extra_info)
 
         # if the ongoing message tracking count goes from 0 to 1, start report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
@@ -161,7 +163,7 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
     }
 
 
-def end_message_tracking(user_id: str, account_id: str):
+def stop_message_tracking(user_id: str, account_id: Union[uuid.UUID, str]):
     with get_session(write=True) as session:
         account = Account.get_by_id(session, account_id)
         if not account or str(account.user_id) != user_id:

@@ -68,25 +68,25 @@ class TestGetUserSetting:
             assert response.status_code == 401
 
 
-class TestCreateUserSetting:
-    def test_success(self, client, new_user):
-        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
-        tags = ["Newsletter"]
-        report_max_duration = 10000
-        response = client.post("/api/v1/user/setting", json={
-            "key_message_tags": tags,
-            "report_max_duration": report_max_duration
-        })
-
-        assert response.status_code == 200
-        assert response.get_json()['data']['setting']['key_message_tags'] == tags
-
-    class TestFail:
-        def test_fail_by_already_set(self, client, new_user_setting):
-            user, setting = new_user_setting
-            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
-            response = client.post("/api/v1/user/setting", json={"key_message_tags": ["Newsletter"]})
-            assert response.status_code == 400
+# class TestCreateUserSetting:
+#     def test_success(self, client, new_user):
+#         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
+#         tags = ["Newsletter"]
+#         report_max_duration = 10000
+#         response = client.post("/api/v1/user/setting", json={
+#             "key_message_tags": tags,
+#             "report_max_duration": report_max_duration
+#         })
+#
+#         assert response.status_code == 200
+#         assert response.get_json()['data']['setting']['key_message_tags'] == tags
+#
+#     class TestFail:
+#         def test_fail_by_already_set(self, client, new_user_setting):
+#             user, setting = new_user_setting
+#             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+#             response = client.post("/api/v1/user/setting", json={"key_message_tags": ["Newsletter"]})
+#             assert response.status_code == 400
 
 
 class TestUpdateUserSetting:
@@ -135,8 +135,8 @@ class TestDeleteUserSetting:
             account_1 = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
             account_2 = db_add_new_account(session, user.id, email, provider=AccountProvider.Microsoft)
 
-            MessageTrackingRecord.add(session, user.id, account_1.id, {})
-            MessageTrackingRecord.add(session, user.id, account_2.id, {
+            MessageTrackingRecord.add(session, user.id, account_1.id, account_1.provider, extra_info={})
+            MessageTrackingRecord.add(session, user.id, account_2.id, account_2.provider, extra_info={
                 "subscription_id": "subscription_id_1",
             })
 

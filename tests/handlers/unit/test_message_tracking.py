@@ -12,6 +12,7 @@ from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
 from biz.dal.report import Report
 from biz.dal.user import Account, User
+from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
 from biz.service.db import get_session
 from biz.utils.env import RuntimeEnv
@@ -26,7 +27,7 @@ def new_user_gmail_tracking_record():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
-        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
+        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), account.provider, extra_info={
             "some_info_key": "some_info_value"
         })
         Report.add(session, user.id, {})
@@ -41,7 +42,7 @@ def new_user_outlook_tracking_record():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = db_add_new_account(session, user.id, email, provider=AccountProvider.Microsoft)
-        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), extra_info={
+        record = MessageTrackingRecord.add(session, str(user.id), str(account.id), account.provider, extra_info={
             "subscription_id": str(uuid.uuid4()),
         })
         Report.add(session, user.id, {})
@@ -56,7 +57,7 @@ def patch_gmail_watch_stop():
     mock_gmail_client = MagicMock()
     mock_gmail_client.users().watch.return_value.execute.return_value = {
         'historyId': '123',
-        'expiration': int((datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp()),
+        'expiration': (datetime.now(timezone.utc) + timedelta(minutes=30)).timestamp() * 1000,
     }
     mock_gmail_client.users().stop.return_value.execute.return_value = {}
 
@@ -117,6 +118,9 @@ class TestMessageTrackingStart:
         @pytest.mark.usefixtures("patch_gmail_watch_stop")
         def test_success_by_exist_google_account(self, client, new_user_gmail_account):
             user, account = new_user_gmail_account
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account_id": account.id,
@@ -127,6 +131,9 @@ class TestMessageTrackingStart:
 
         @pytest.mark.usefixtures("patch_gmail_watch_stop")
         def test_success_by_new_google_account(self, client, new_user):
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(new_user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account": {
@@ -156,6 +163,9 @@ class TestMessageTrackingStart:
         @pytest.mark.usefixtures("patch_outlook_subscription_create_delete")
         @pytest.mark.usefixtures("patch_outlook_sub_public_key")
         def test_success_by_exist_outlook_account(self, client, new_user):
+            with get_session(write=True) as session:
+                UserSubscription.add(session, str(new_user.id), generate_random_string(20),
+                                     generate_random_string(20), "month", "active")
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(new_user.id)))
             response = client.post("/api/v1/message/tracking/start", json={
                 "account": {

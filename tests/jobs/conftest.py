@@ -3,7 +3,7 @@ from pytest_postgresql.janitor import DatabaseJanitor
 from sqlalchemy import text
 
 from biz.dal.base import Base
-from biz.service.db import init_db, get_engine, get_session
+from biz.service.db import init_db, get_session, get_engine
 from biz.utils.env import RuntimeEnv
 
 
@@ -13,7 +13,7 @@ def conf_db():
     password = "123456"
     host = "localhost"
     port = 5432
-    db_name = "tests-haper-consumer"
+    db_name = "tests-haper-jobs"
     janitor = DatabaseJanitor(
         user=user,
         password=password,
@@ -37,5 +37,3 @@ def conf_db():
     yield janitor
 
     janitor.drop()
-
-

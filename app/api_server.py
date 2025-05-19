@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_cors import CORS
+from flask.logging import default_handler
 
 from biz.service.aws.sm import load_secret
 from biz.service.rate_limiter import user_limiter
@@ -7,7 +8,6 @@ from biz.service.aws.sqs import init_sqs
 from biz.utils.env import RuntimeEnv
 from biz.handler import api_v1
 from biz.service.db import init_db
-from biz.utils.logger import config_logger
 
 
 def create_app():
@@ -25,7 +25,7 @@ def create_app():
             "supports_credentials": True,
         }
     })
-    config_logger(app)
+    app.logger.removeHandler(default_handler)
     return app
 
 

@@ -36,7 +36,7 @@ class User(Base):
     )
     image = Column(
         Text,
-        comment='The portrait URL of the user'
+        comment='The portrait url of the user'
     )
     email = Column(
         String(128),
@@ -52,6 +52,10 @@ class User(Base):
     password = Column(
         String(128),
         comment='Hashed password of user'
+    )
+    stripe_customer_id = Column(
+        String(128),
+        comment='Current user corresponding stripe customer id',
     )
     created_at = Column(
         TIMESTAMP(timezone=True),
@@ -105,6 +109,25 @@ class User(Base):
     def mark_deleted(cls, session: Session, user_id: Union[str, UUID]):
         session.query(cls).filter_by(id=user_id).update({'deleted_at': func.now()})
 
+    @classmethod
+    def update(cls, session: Session, user_id: Union[str, UUID], stripe_customer_id: Optional[str] = None):
+        updates = {}
+        if stripe_customer_id:
+            updates["stripe_customer_id"] = stripe_customer_id
+
+        session.query(cls).filter_by(id=user_id).update(updates)
+
+    @classmethod
+    def delete(cls, session: Session, user_id: Union[str, UUID]):
+        """
+        Delete a user by their ID from the database.
+
+        :param session: SQLAlchemy session instance
+        :param user_id: UUID of the user to delete
+        """
+        session.query(cls).filter_by(id=user_id).delete()
+
+
 
 class AccountProvider(str, Enum):
     Google = "google"
@@ -133,13 +156,11 @@ class Account(Base):
     )
     provider = Column(
         String(16),
-        primary_key=False,
         nullable=False,
         comment='The OAuth provider, like google, discord, etc.'
     )
     provider_account_id = Column(
         Text,
-        primary_key=False,
         nullable=False,
         comment='The unique account ID of the user for the provider'
     )
@@ -165,6 +186,13 @@ class Account(Base):
         nullable=False,
         server_default=func.now(),
         comment='UTC timestamp when the account was created'
+    )
+    updated_at = Column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment='UTC timestamp when the account was last updated'
     )
 
     @classmethod

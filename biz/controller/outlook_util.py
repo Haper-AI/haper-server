@@ -2,7 +2,6 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 
 import requests
-from msgraph.generated.models import outlook_item
 from msgraph.generated.models.body_type import BodyType
 from msgraph.generated.models.email_address import EmailAddress
 from msgraph.generated.models.item_body import ItemBody
@@ -127,7 +126,7 @@ class OutlookAPIClient:
         return subscription_id, int(watch_expires_at.timestamp())
 
     def refresh_watch_outlook(self, subscription_id: str):
-        watch_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10070)
+        watch_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10070) # 10 minutes less than 1 week
         request_body = Subscription(
             expiration_date_time=watch_expires_at,
         )

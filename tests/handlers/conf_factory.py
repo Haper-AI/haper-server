@@ -25,7 +25,7 @@ def new_handler_test_conf(scope, db_name: str, sqs_queue_name: str):
             host=host,
             port=port,
             dbname=db_name,
-            version="10.1",
+            version="17.0",
         )
         janitor.init()
 

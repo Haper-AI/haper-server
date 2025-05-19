@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
@@ -13,12 +15,6 @@ def init_db():
     # use pool_pre_ping right now to prevent TCP EOF as the server and db cluster may distribute in different data center
     # learn more in this post: https://blog.stigok.com/2021/02/28/sqlalchemy-postgres-ssl-eof-detected.html
     _engine = create_engine(RuntimeEnv.Instance().POSTGRES_DSN, pool_pre_ping=True)
-    _session_factory = sessionmaker(bind=_engine)
-
-
-def init_db_with_engine(engine: Engine):
-    global _engine, _session_factory
-    _engine = engine
     _session_factory = sessionmaker(bind=_engine)
 
 

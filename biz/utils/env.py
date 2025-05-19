@@ -45,6 +45,7 @@ class RuntimeEnv:
         self.SQS_REGION = os.getenv("SQS_REGION")
         self.SQS_ENDPOINT = os.getenv("SQS_ENDPOINT")
         self.SQS_REPORT_ASYNC_ACTION_QUEUE_URL = os.getenv("SQS_REPORT_ASYNC_ACTION_QUEUE_URL")
+        self.SQS_MAX_RETRIES = int(os.getenv("SQS_MAX_RETRIES", "5"))
 
         ## aws secret manager
         self.AWS_SM_REGION = os.getenv("AWS_SM_REGION")
@@ -61,3 +62,7 @@ class RuntimeEnv:
         self.OUTLOOK_SYNC_WEBHOOK_URL = os.getenv("OUTLOOK_SYNC_WEBHOOK_URL")
         self.MICROSOFT_CERTIFICATE_KEY_ID = os.getenv("MICROSOFT_CERTIFICATE_KEY_ID")
 
+        # stripe
+        self.STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
+        self.STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+        self.STRIPE_SUBSCRIPTION_TRIAL_DAYS = int(os.getenv("STRIPE_SUBSCRIPTION_TRIAL_DAYS", "7"))

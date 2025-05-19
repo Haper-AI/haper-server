@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import Literal, List, Optional, Dict
 
 from googleapiclient.errors import HttpError
@@ -14,7 +15,7 @@ from biz.controller.outlook_util import extract_outlook_info, OutlookAPIClient
 from biz.dal.email import Email, EmailSource
 from biz.dal.report_batch_action import ReportBatchAction, BatchActionRunStatus, MessageActionResult
 from biz.dal.user import Account, User
-from biz.model import ReportMessagesInQueueFieldName
+from biz.model import ReportFieldName
 from biz.model.report.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
@@ -73,15 +74,20 @@ def list_history_reports(user_id: str, page: int, page_size: int):
     return reports, count
 
 
-def get_report_by_id(user_id: str, report_id: str):
-    with get_session(write=False) as session:
+def get_report_by_id(user_id: str, report_id: str, for_access: bool = False):
+    with get_session(write=for_access) as session:
         report = Report.get_by_id(session, report_id)
 
-    if not report or report.is_deleted:
-        raise ResponseCode.ResourceNotFound.create_error("report not found")
+        if not report or report.deleted_at:
+            raise ResponseCode.ResourceNotFound.create_error("report not found")
 
-    if str(report.user_id) != user_id:
-        raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+        if str(report.user_id) != user_id:
+            raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+
+        if for_access:
+            Report.update(session, report.id, update_last_access_at=True)
+            report.last_access_at = datetime.now(timezone.utc)
+            make_transient(report)
     return report
 
 
@@ -89,7 +95,7 @@ def delete_report_by_id(user_id: str, report_id: str):
     with get_session(write=True) as session:
         report = Report.get_by_id(session, report_id, for_update=True)
 
-        if not report or report.is_deleted:
+        if not report or report.deleted_at:
             raise ResponseCode.ResourceNotFound.create_error("report not found")
 
         if str(report.user_id) != user_id:
@@ -144,8 +150,8 @@ def check_can_op_on_report_and_parse_content(session: Session, user_id: str, rep
         raise ResponseCode.UnsupportedAction.create_error(
             "current report has not content, please wait for new messages")
 
-    if ReportMessagesInQueueFieldName in report.content and report.content[ReportMessagesInQueueFieldName]:
-        for k, v in report.content[ReportMessagesInQueueFieldName].items():
+    if ReportFieldName.MessagesInQueue in report.content and report.content[ReportFieldName.MessagesInQueue]:
+        for k, v in report.content[ReportFieldName.MessagesInQueue].items():
             if v > 0:
                 raise ResponseCode.UnsupportedAction.create_error(
                     "current report still has messages in queue to process, please wait for it to complete"
@@ -284,7 +290,7 @@ def poll_last_batch_action(run_id: str):
 
 def poll_report_messages_in_queue_status(report_id: str):
     with get_session(write=False) as session:
-        return Report.get_content_subfield(session, report_id, ReportMessagesInQueueFieldName)
+        return Report.get_content_subfield(session, report_id, ReportFieldName.MessagesInQueue)
 
 
 generate_email_reply_prompt_template = ChatPromptTemplate.from_template(

@@ -1,9 +1,9 @@
 import uuid
 from typing import Dict, Union
 
-from sqlalchemy import Column, Boolean, ForeignKey, TIMESTAMP, String, cast
+from sqlalchemy import Column, ForeignKey, TIMESTAMP, String, cast
 
-from sqlalchemy.dialects.postgresql import UUID, JSONB, array
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from .base import Base
@@ -54,19 +54,22 @@ class Report(Base):
         nullable=False,
         comment='JSONB content of the report, storing structured data'
     )
-    finalized_at = Column(
-        TIMESTAMP(timezone=True),
-        comment='Timestamp when the report was finalized'
-    )
-    is_deleted = Column(
-        Boolean,
-        default=False,
-        comment='Indicates whether the report is marked as deleted by the user'
-    )
     created_at = Column(
         TIMESTAMP(timezone=True),
         server_default=func.now(),
         comment='Timestamp when the report was created'
+    )
+    finalized_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was finalized'
+    )
+    last_access_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was last read by the user'
+    )
+    deleted_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the report was marked as deleted by the user'
     )
     updated_at = Column(
         TIMESTAMP(timezone=True),
@@ -88,7 +91,7 @@ class Report(Base):
 
     @classmethod
     def update(cls, session: Session, report_id: Union[str, UUID],
-               status: ReportStatus = None, content: Dict = None):
+               status: ReportStatus = None, content: Dict = None, update_last_access_at: bool = False):
         updates = {}
         if status:
             updates['status'] = status
@@ -96,6 +99,8 @@ class Report(Base):
                 updates['finalized_at'] = func.now()
         if content:
             updates['content'] = content
+        if update_last_access_at:
+            updates['last_access_at'] = func.now()
         session.query(cls).filter_by(id=report_id).update(updates)
 
     @classmethod
@@ -104,7 +109,7 @@ class Report(Base):
         session.query(cls).filter_by(id=report_id).update({
             'content': func.jsonb_set(
                 cls.content,
-                array([content_subfield_key]),
+                [content_subfield_key],
                 cast(content_subfield_value, JSONB)
             )
         })
@@ -127,7 +132,7 @@ class Report(Base):
     @classmethod
     def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID], for_update=False):
         q = (session.query(cls)
-             .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Appending)
+             .filter_by(user_id=user_id, status=ReportStatus.Appending)
              .order_by(cls.created_at.desc())
              )
         if for_update:
@@ -138,7 +143,7 @@ class Report(Base):
     def count_by_user(cls, session: Session, user_id: Union[str, UUID]):
         return (
             session.query(cls)
-            .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Finalized)
+            .filter_by(user_id=user_id, deleted_at=None, status=ReportStatus.Finalized)
             .count()
         )
 
@@ -146,7 +151,7 @@ class Report(Base):
     def list_by_user(cls, session: Session, user_id: Union[str, UUID], page: int, page_size: int):
         return (
             session.query(cls)
-            .filter_by(user_id=user_id, is_deleted=False, status=ReportStatus.Finalized)
+            .filter_by(user_id=user_id, deleted_at=None, status=ReportStatus.Finalized)
             .order_by(cls.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
@@ -155,7 +160,7 @@ class Report(Base):
 
     @classmethod
     def mark_deleted(cls, session: Session, report_id: Union[str, UUID]):
-        session.query(cls).filter_by(id=report_id).update({'is_deleted': True})
+        session.query(cls).filter_by(id=report_id).update({'deleted_at': func.now()})
 
     @classmethod
     def delete(cls, session: Session, report_id: Union[str, UUID]):

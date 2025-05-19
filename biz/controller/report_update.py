@@ -11,7 +11,7 @@ from biz.controller.outlook_util import extract_outlook_info
 from biz.dal.email import Email, EmailSource
 from biz.dal.report import MessageCategory, MessageAction, Report
 from biz.dal.user_setting import UserSetting
-from biz.model import ReportMessagesInQueueFieldName
+from biz.model import ReportFieldName
 from biz.model.report.rich_text import rich_text_from_dict
 from biz.service.db import get_session
 from biz.model.report import report as report_model
@@ -345,7 +345,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
             messages_in_queue = Report.get_content_subfield(
                 session,
                 report_id,
-                ReportMessagesInQueueFieldName,
+                ReportFieldName.MessagesInQueue,
                 for_update=True
             )
             messages_in_queue[EmailSource.Gmail] -= message_num_to_decrease
@@ -359,13 +359,13 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
             messages_in_queue = Report.get_content_subfield(
                 session,
                 report_id,
-                ReportMessagesInQueueFieldName,
+                ReportFieldName.MessagesInQueue,
                 for_update=True
             )
             messages_in_queue[EmailSource.Gmail] -= message_num_to_decrease
             logger.info("decreasing {} gmail messages, remaining messages in queue: {}".format(message_num_to_decrease,
                                                                                                messages_in_queue))
-            Report.update_content_subfield(session, report_id, ReportMessagesInQueueFieldName, messages_in_queue)
+            Report.update_content_subfield(session, report_id, ReportFieldName.MessagesInQueue, messages_in_queue)
 
 
 def update_report_with_outlook_emails(user_id: str, account_id: str, account_email: str, report_id: str,
@@ -542,7 +542,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
             messages_in_queue = Report.get_content_subfield(
                 session,
                 report_id,
-                ReportMessagesInQueueFieldName,
+                ReportFieldName.MessagesInQueue,
                 for_update=True
             )
             messages_in_queue[EmailSource.Outlook] -= message_num_to_decrease
@@ -556,10 +556,10 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
             messages_in_queue = Report.get_content_subfield(
                 session,
                 report_id,
-                ReportMessagesInQueueFieldName,
+                ReportFieldName.MessagesInQueue,
                 for_update=True
             )
             messages_in_queue[EmailSource.Outlook] -= message_num_to_decrease
             logger.info("decreasing {} outlook messages, remaining messages in queue: {}".format(message_num_to_decrease,
                                                                                                messages_in_queue))
-            Report.update_content_subfield(session, report_id, ReportMessagesInQueueFieldName, messages_in_queue)
+            Report.update_content_subfield(session, report_id, ReportFieldName.MessagesInQueue, messages_in_queue)

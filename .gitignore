@@ -167,3 +167,5 @@ cython_debug/
 
 # tmp files
 tmp
+
+script

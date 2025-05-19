@@ -1,12 +1,12 @@
 import uuid
 from typing import Optional
 
-from flask import Blueprint, request
+from flask import Blueprint, request, Flask
 from pydantic import BaseModel, PositiveInt, model_validator
 
 from biz.controller import message_tracking as message_tracking_ctrl
 from biz.dal.user import AccountProvider
-from biz.handler.middleware import catch_error, jwt_auth
+from biz.handler.middleware import catch_error, user_auth
 from biz.utils.response import HTTPResponse
 
 tracking_routes = Blueprint("message_tracking_api", __name__, url_prefix="/tracking")
@@ -14,7 +14,7 @@ tracking_routes = Blueprint("message_tracking_api", __name__, url_prefix="/track
 
 @tracking_routes.route("/status")
 @catch_error
-@jwt_auth
+@user_auth()
 def list_message_tracking_status():
     resp = HTTPResponse(request.method, request.path)
     status = message_tracking_ctrl.list_user_message_tracking_status(request.ctx.user_id)
@@ -53,7 +53,7 @@ class StartMessageTrackingReq(BaseModel):
 
 @tracking_routes.route("/start", methods=["POST"])
 @catch_error
-@jwt_auth
+@user_auth(check_subscription=True)
 def start_message_tracking():
     resp = HTTPResponse(request.method, request.path)
     req = StartMessageTrackingReq(**request.get_json())
@@ -81,11 +81,11 @@ class EndMessageTrackingReq(BaseModel):
 
 @tracking_routes.route("/stop", methods=["POST"])
 @catch_error
-@jwt_auth
+@user_auth()
 def stop_message_tracking():
     resp = HTTPResponse(request.method, request.path)
     req = EndMessageTrackingReq(**request.get_json())
-    record = message_tracking_ctrl.end_message_tracking(request.ctx.user_id, req.account_id)
+    record = message_tracking_ctrl.stop_message_tracking(request.ctx.user_id, req.account_id)
     resp.set_data({
         "new_tracking_status": record
     })

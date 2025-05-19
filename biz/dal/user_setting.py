@@ -30,7 +30,6 @@ class UserSetting(Base):
     report_max_duration = Column(
         Integer,
         nullable=False,
-        default=DEFAULT_REPORT_MAX_TIME_DURATION,
         comment="Maximum time duration for a report cover in seconds",
     )
 
@@ -48,7 +47,7 @@ class UserSetting(Base):
 
     @classmethod
     def add(cls, session: Session, user_id: Union[str, UUID], key_message_tags: Optional[List[str]] = None,
-            report_max_duration: Optional[int] = None):
+            report_max_duration: int = DEFAULT_REPORT_MAX_TIME_DURATION):
         setting = cls(
             user_id=user_id,
             key_message_tags=key_message_tags,
