@@ -7,6 +7,7 @@ from typing import List
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
 from biz.utils import split_email_str
 from biz.utils.env import RuntimeEnv
 from biz.model.report import report_update_message as rum_model
@@ -20,40 +21,26 @@ class RawGmailInfo:
         self.raw_email = raw_email
 
 
-class GmailInfo:
-    marked_promotion: bool
-    snippet: str
-    mime_type: str
-    receive_at: datetime
-    sender: str  # sender that contains name and email in the form of "{sender_name} <{sender_email}>"
-    sender_name: str
-    sender_email: str
-    to: str
-    subject: str
-    body: str
-
+class GmailInfo(ExtractedMail):
     def __init__(self):
+        super().__init__()
         self.marked_promotion = False
         self.snippet = ""
-        self.mime_type = ""
-        self.receive_at = datetime.now(timezone.utc)
-        self.sender = ""
-        self.sender_name = ""
-        self.sender_email = ""
-        self.to = ""
-        self.subject = ""
-        self.body = ""
 
 
-def extract_gmail_info(email_info: dict):
+def extract_gmail_info(email_info: dict, message_id: str = "", thread_id: str = "") -> GmailInfo:
     label_ids = email_info["labelIds"]
     snippet = email_info["snippet"]
     payload = email_info["payload"]
     headers = payload["headers"]
     extracted_gmail_info = GmailInfo()
+    if message_id:
+        extracted_gmail_info.message_id = message_id
+    if thread_id:
+        extracted_gmail_info.thread_id = thread_id
     extracted_gmail_info.marked_promotion = "CATEGORY_PROMOTION" in label_ids
     extracted_gmail_info.snippet = snippet
-    extracted_gmail_info.mime_type = payload["mimeType"]
+    mime_type = payload["mimeType"]
     for header in headers:
         if header["name"] == "Date":
             raw_date = header["value"]
@@ -71,19 +58,21 @@ def extract_gmail_info(email_info: dict):
 
     # get email body
     body = ""
-    if extracted_gmail_info.mime_type == 'multipart/alternative':
+    if mime_type == 'multipart/alternative':
         parts = payload["parts"]
         # prefer html part first
         for part in parts:
             if part["mimeType"] == "text/html":
                 body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
+                extracted_gmail_info.mime_type = EmailBodyType.Html
                 break
 
         # if not html part, default to use the first part
         if not body:
             body = base64.urlsafe_b64decode(parts[0]["body"]["data"]).decode("utf-8")
 
-    elif extracted_gmail_info.mime_type == "text/plain" or extracted_gmail_info.mime_type == "text/html":
+    elif mime_type == "text/plain" or mime_type == "text/html":
+        extracted_gmail_info.mime_type = EmailBodyType(mime_type)
         if "data" in payload["body"]:
             body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
         else:

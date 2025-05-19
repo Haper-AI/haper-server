@@ -37,7 +37,7 @@ def sync_user_gmail_message(email: str, history_id: int):
         account = Account.get_by_mail_and_provider(session, email, AccountProvider.Google)
         if account is None:
             # raise ResponseCode.InvalidParam.create_error("email is not connected to a registered account")
-            logger.warning("email is not connected to a registered account")
+            logger.warning("email {} is not connected to a registered account".format(email))
             return
 
         tracking_status = MessageTrackingRecord.get_by_user_id_and_account_id(session, account.user_id, account.id)

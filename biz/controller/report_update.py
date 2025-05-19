@@ -196,7 +196,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
         mail_report_item_list: List[report_model.MailMessageItem] = []
         info_for_report_summary_update: List[dict] = []
         for raw_gmail in gmail_list:
-            extracted_gmail = extract_gmail_info(raw_gmail.raw_email)
+            extracted_gmail = extract_gmail_info(raw_gmail.raw_email, raw_gmail.message_id, raw_gmail.thread_id)
 
             # use llm to inference
             # generate summary and tags from email
@@ -253,7 +253,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
                     sender=extracted_gmail.sender,
                     receiver=extracted_gmail.to,
                     subject=extracted_gmail.subject,
-                    received_at=extracted_gmail.receive_at,
+                    receive_at=extracted_gmail.receive_at,
                     tags=email_summary_json["tags"],
                     summary=email_summary_json["summary"],
                     summary_embedding=summary_embedding,
@@ -450,7 +450,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                     sender=extracted_outlook.sender,
                     receiver=extracted_outlook.to,
                     subject=extracted_outlook.subject,
-                    received_at=extracted_outlook.receive_at,
+                    receive_at=extracted_outlook.receive_at,
                     tags=email_summary_json["tags"],
                     summary=email_summary_json["summary"],
                     summary_embedding=summary_embedding,

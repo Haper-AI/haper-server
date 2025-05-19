@@ -26,10 +26,11 @@ class EmailSource(str, PyEnum):
 
 class Email(Base):
     __tablename__ = 'emails'
-    __table_args__ = (
-        UniqueConstraint('source', 'message_id', name='unique_email_per_source'),
-        {'comment': 'Stores metadata and embedding of emails for RAG'}
-    )
+    # __table_args__ = (
+    #     UniqueConstraint('source', 'message_id', name='unique_email_per_source'),
+    #     {'comment': 'Stores metadata and embedding of emails for RAG'}
+    # )
+    __table_args__ = {'comment': 'Stores metadata and embedding of emails for RAG'}
 
     id = Column(
         BigInteger,
@@ -71,7 +72,7 @@ class Email(Base):
         Text,
         comment='Subject line of the email'
     )
-    received_at = Column(
+    receive_at = Column(
         TIMESTAMP(timezone=True),
         nullable=False,
         comment='Timestamp when the email was received'
@@ -115,6 +116,10 @@ class Email(Base):
         server_default=func.now(),
         comment='Timestamp when the email record was created'
     )
+    deleted_at = Column(
+        TIMESTAMP(timezone=True),
+        comment='Timestamp when the email was deleted',
+    )
     updated_at = Column(
         TIMESTAMP(timezone=True),
         server_default=func.now(),
@@ -131,7 +136,7 @@ class Email(Base):
                            cosine_distance_boundary: float = 0.2,
                            limit: int = 5,
                            require_reply_message: bool = False,
-                           exclude_ids: Optional[List[int]]  = None,
+                           exclude_ids: Optional[List[int]] = None,
                            ):
         cosine_distance = cls.summary_embedding.cosine_distance(summary_embedding)
         query_fields = [cls.sender, cls.subject, cls.summary, cls.llm_category,
@@ -176,6 +181,12 @@ class Email(Base):
             updates['reply_message'] = reply_message
         if updates:
             session.query(cls).filter_by(id=email_id).update(updates)
+
+    @classmethod
+    def mark_deleted(cls, session: Session, email_id: int):
+        session.query(cls).filter_by(id=email_id).update({
+            cls.deleted_at: func.now()
+        })
 
     @classmethod
     def delete(cls, session: Session, email_id: int):

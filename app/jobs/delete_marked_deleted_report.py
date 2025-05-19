@@ -29,6 +29,8 @@ def job_main():
                         datetime.now(timezone.utc)
                     ))
 
+                    # TODO: delete related item in emails table
+
         # check if we have more records to process
         has_db_records = len(reports) > 0
         offset += len(reports)
