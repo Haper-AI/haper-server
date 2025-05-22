@@ -183,7 +183,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
                 user_key_tags = user_setting.key_message_tags
 
         # define llm model
-        chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
+        chat_model = init_chat_model("gemini-2.5-flash-preview-05-20", model_provider="google-genai")
         embedding_model = init_embeddings("text-embedding-3-small", provider="openai", dimensions=768)
 
         fixed_categories = json.dumps([MessageCategory.Essential, MessageCategory.NonEssential])
@@ -204,7 +204,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
                 words_limit=50,
                 email_sender=extracted_gmail.sender,
                 email_subject=extracted_gmail.subject,
-                email_body=extracted_gmail.body,
+                email_body=extracted_gmail.cleaned_body,
                 email_marked_promotion=extracted_gmail.marked_promotion,
             )
             email_summary_response = chat_model.invoke(formated_prompt)
@@ -380,7 +380,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                 user_key_tags = user_setting.key_message_tags
 
         # define llm model
-        chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
+        chat_model = init_chat_model("gemini-2.5-flash-preview-05-20", model_provider="google-genai")
         embedding_model = init_embeddings("text-embedding-3-small", provider="openai", dimensions=768)
 
         fixed_categories = json.dumps([MessageCategory.Essential, MessageCategory.NonEssential])
@@ -401,7 +401,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                 words_limit=50,
                 email_sender=extracted_outlook.sender,
                 email_subject=extracted_outlook.subject,
-                email_body=extracted_outlook.body,
+                email_body=extracted_outlook.cleaned_body,
                 email_marked_promotion="Unknown",
             )
             email_summary_response = chat_model.invoke(formated_prompt)

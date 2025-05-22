@@ -8,7 +8,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
-from biz.utils import split_email_str
+from biz.utils import split_email_str, extract_visible_text_from_email
 from biz.utils.env import RuntimeEnv
 from biz.model.report import report_update_message as rum_model
 from biz.utils.logger import logger
@@ -28,7 +28,36 @@ class GmailInfo(ExtractedMail):
         self.snippet = ""
 
 
-def extract_gmail_info(email_info: dict, message_id: str = "", thread_id: str = "") -> GmailInfo:
+# recursively parse gmail body
+def extract_body_from_payload(payload):
+    mime_type = payload.get("mimeType", "")
+    body = None
+    body_type = None
+
+    if mime_type in ["text/plain", "text/html"]:
+        if "data" in payload.get("body", {}):
+            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
+            body_type = EmailBodyType(mime_type)
+
+    elif mime_type.startswith("multipart/"):  # handle multipart emails
+        for part in payload.get("parts", []):
+            part_body, part_body_type = extract_body_from_payload(part)
+
+            # Prefer HTML content if available
+            if part_body_type == EmailBodyType.Html:
+                body = part_body
+                body_type = part_body_type
+                return body, body_type
+
+            # Use the first found text content if no HTML content found yet
+            elif part_body_type == EmailBodyType.Text and not body:
+                body = part_body
+                body_type = part_body_type
+
+    return body, body_type
+
+
+def extract_gmail_info(email_info: dict, message_id: str = "", thread_id: str = "", clean_html=True) -> GmailInfo:
     label_ids = email_info["labelIds"]
     snippet = email_info["snippet"]
     payload = email_info["payload"]
@@ -40,7 +69,6 @@ def extract_gmail_info(email_info: dict, message_id: str = "", thread_id: str = 
         extracted_gmail_info.thread_id = thread_id
     extracted_gmail_info.marked_promotion = "CATEGORY_PROMOTION" in label_ids
     extracted_gmail_info.snippet = snippet
-    mime_type = payload["mimeType"]
     for header in headers:
         if header["name"] == "Date":
             raw_date = header["value"]
@@ -57,28 +85,16 @@ def extract_gmail_info(email_info: dict, message_id: str = "", thread_id: str = 
             extracted_gmail_info.subject = header['value']
 
     # get email body
-    body = ""
-    if mime_type == 'multipart/alternative':
-        parts = payload["parts"]
-        # prefer html part first
-        for part in parts:
-            if part["mimeType"] == "text/html":
-                body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8")
-                extracted_gmail_info.mime_type = EmailBodyType.Html
-                break
-
-        # if not html part, default to use the first part
-        if not body:
-            body = base64.urlsafe_b64decode(parts[0]["body"]["data"]).decode("utf-8")
-
-    elif mime_type == "text/plain" or mime_type == "text/html":
-        extracted_gmail_info.mime_type = EmailBodyType(mime_type)
-        if "data" in payload["body"]:
-            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
-        else:
-            logger.warning("no data found in payload body, payload body is {}".format(payload["body"]))
+    body, body_type = extract_body_from_payload(payload)
+    if not body:
+        logger.warning("no data found in payload body, payload body is {}".format(payload["body"]))
 
     extracted_gmail_info.body = body
+    extracted_gmail_info.mime_type = body_type
+    if body_type == EmailBodyType.Html and clean_html:
+        extracted_gmail_info.cleaned_body = extract_visible_text_from_email(body)
+    else:
+        extracted_gmail_info.cleaned_body = body
 
     return extracted_gmail_info
 
@@ -129,11 +145,11 @@ class GmailAPIClient:
                 userId="me",
                 startHistoryId=pre_history_id,
                 pageToken=page_token,
-                historyTypes=["messageAdded"] # Only get added message only right now.
+                historyTypes=["messageAdded"]  # Only get added message only right now.
             ).execute()
 
             for history in response.get('history', []):
-                if int(history["id"]) <= cur_history_id: # only get message range in [pre_history_id, cur_history_id]
+                if int(history["id"]) <= cur_history_id:  # only get message range in [pre_history_id, cur_history_id]
                     if "messagesAdded" in history:
                         for message in history['messagesAdded']:
                             new_gmail_message.append(rum_model.GmailNewMessage(

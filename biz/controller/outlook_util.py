@@ -12,6 +12,7 @@ from msgraph.generated.users.item.messages.item.reply.reply_post_request_body im
 
 from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
 from biz.service.aws.sm import get_outlook_sub_public_b64
+from biz.utils import extract_visible_text_from_email
 from biz.utils.env import RuntimeEnv
 from msgraph import GraphServiceClient
 from azure.core.credentials import AccessToken
@@ -22,7 +23,7 @@ class OutlookInfo(ExtractedMail):
         super().__init__()
 
 
-def extract_outlook_info(email_info: Message):
+def extract_outlook_info(email_info: Message, clean_html=True) -> OutlookInfo:
     extracted_outlook_info = OutlookInfo()
     extracted_outlook_info.message_id = email_info.id
     extracted_outlook_info.thread_id = email_info.conversation_id
@@ -36,11 +37,18 @@ def extract_outlook_info(email_info: Message):
     extracted_outlook_info.to = recipient_info_dict.address
     extracted_outlook_info.subject = email_info.subject
     body_info_dict = email_info.body
+
+    # get body type and do cleaning if needed
     if body_info_dict.content_type == BodyType.Html:
         extracted_outlook_info.mime_type = EmailBodyType.Html
+        if clean_html:
+            extracted_outlook_info.cleaned_body = extract_visible_text_from_email(body_info_dict.content)
     elif body_info_dict.content_type == BodyType.Text:
         extracted_outlook_info.mime_type = EmailBodyType.Text
+
     extracted_outlook_info.body = body_info_dict.content
+    if not extracted_outlook_info.cleaned_body: # assign cleaned body to body if not already set
+        extracted_outlook_info.cleaned_body = extracted_outlook_info.body
 
     return extracted_outlook_info
 

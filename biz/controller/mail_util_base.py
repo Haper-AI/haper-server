@@ -19,3 +19,4 @@ class ExtractedMail:
         self.to = ""
         self.subject = ""
         self.body = ""
+        self.cleaned_body = "" # cleaned body text
