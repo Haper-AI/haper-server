@@ -17,4 +17,4 @@ ENV PYTHONPATH="/app/haper-server"
 EXPOSE 8888
 
 # Default to run flask app
-CMD ["sh", "-c", "gunicorn -k gevent --bind 0.0.0.0:8888 -w ${NUM_WORKER:-1} --threads ${NUM_THREAD:-1} app.api_server:app"]
+CMD ["sh", "-c", "gunicorn -k gevent --bind 0.0.0.0:8888 -w ${NUM_WORKER:-1} --threads ${NUM_THREAD:-1} --timeout ${WORKER_TIMEOUT:-30} app.api_server:app"]

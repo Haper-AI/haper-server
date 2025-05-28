@@ -17,6 +17,7 @@ from biz.service.db import get_session
 from biz.model.report import report as report_model
 from biz.utils import schema_loader
 from biz.utils.logger import logger
+from biz.utils.response import ResponseCode
 
 example_summary = json.dumps([
     {
@@ -183,12 +184,14 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
                 user_key_tags = user_setting.key_message_tags
 
         # define llm model
-        chat_model = init_chat_model("gemini-2.5-flash-preview-05-20", model_provider="google-genai")
+        chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
         embedding_model = init_embeddings("text-embedding-3-small", provider="openai", dimensions=768)
 
-        fixed_categories = json.dumps([MessageCategory.Essential, MessageCategory.NonEssential])
-        fixed_actions = json.dumps([MessageAction.Read, MessageAction.Delete, MessageAction.Reply])
-        user_key_tags = json.dumps(user_key_tags)
+        fixed_categories = [MessageCategory.Essential, MessageCategory.NonEssential]
+        fixed_categories_str = json.dumps(fixed_categories)
+        fixed_actions = [MessageAction.Read, MessageAction.Delete, MessageAction.Reply]
+        fixed_actions_str = json.dumps(fixed_actions)
+        user_key_tags_str = json.dumps(user_key_tags)
 
         # the email records that need to insert into the db
         email_db_records: List[Email] = []
@@ -230,19 +233,25 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
                 history_examples = "\n    ".join([f'  - {e}' for e in history_examples_json_list])
 
             # generate suggested category and action for email
-            formated_prompt = classify_email_prompt_template.format(
-                fixed_categories=fixed_categories,
-                user_key_tags=user_key_tags,
-                fixed_actions=fixed_actions,
-                history_examples=history_examples,
-                email_sender=extracted_gmail.sender,
-                email_subject=extracted_gmail.subject,
-                email_marked_promotion=extracted_gmail.marked_promotion,
-                summary_by_llm=email_summary_json["summary"],
-                tags_by_llm=email_summary_json["tags"],
-            )
-            classify_response = chat_model.invoke(formated_prompt)
-            classify_json = json.loads(classify_response.content)
+            for i in range(3): # retry 3 times in case of generation error
+                formated_prompt = classify_email_prompt_template.format(
+                    fixed_categories=fixed_categories_str,
+                    user_key_tags=user_key_tags_str,
+                    fixed_actions=fixed_actions_str,
+                    history_examples=history_examples,
+                    email_sender=extracted_gmail.sender,
+                    email_subject=extracted_gmail.subject,
+                    email_marked_promotion=extracted_gmail.marked_promotion,
+                    summary_by_llm=email_summary_json["summary"],
+                    tags_by_llm=email_summary_json["tags"],
+                )
+                classify_response = chat_model.invoke(formated_prompt)
+                classify_json = json.loads(classify_response.content)
+                if classify_json["category"] in fixed_categories and classify_json["action"] in fixed_actions:
+                    break
+
+                if i == 2:
+                    raise ResponseCode.InternalUnknownError.create_error("email classification failed after 3 retries")
 
             email_db_records.append(
                 Email(
@@ -380,12 +389,14 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                 user_key_tags = user_setting.key_message_tags
 
         # define llm model
-        chat_model = init_chat_model("gemini-2.5-flash-preview-05-20", model_provider="google-genai")
+        chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
         embedding_model = init_embeddings("text-embedding-3-small", provider="openai", dimensions=768)
 
-        fixed_categories = json.dumps([MessageCategory.Essential, MessageCategory.NonEssential])
-        fixed_actions = json.dumps([MessageAction.Read, MessageAction.Delete, MessageAction.Reply])
-        user_key_tags = json.dumps(user_key_tags)
+        fixed_categories = [MessageCategory.Essential, MessageCategory.NonEssential]
+        fixed_categories_str = json.dumps(fixed_categories)
+        fixed_actions = [MessageAction.Read, MessageAction.Delete, MessageAction.Reply]
+        fixed_actions_str = json.dumps(fixed_actions)
+        user_key_tags_str = json.dumps(user_key_tags)
 
         # the email records that need to insert into the db
         email_db_records: List[Email] = []
@@ -427,19 +438,25 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                 history_examples = "\n    ".join([f'  - {e}' for e in history_examples_json_list])
 
             # generate suggested category and action for email
-            formated_prompt = classify_email_prompt_template.format(
-                fixed_categories=fixed_categories,
-                user_key_tags=user_key_tags,
-                fixed_actions=fixed_actions,
-                history_examples=history_examples,
-                email_sender=extracted_outlook.sender_email,
-                email_subject=extracted_outlook.subject,
-                email_marked_promotion="Unknown",
-                summary_by_llm=email_summary_json["summary"],
-                tags_by_llm=email_summary_json["tags"],
-            )
-            classify_response = chat_model.invoke(formated_prompt)
-            classify_json = json.loads(classify_response.content)
+            for i in range(3): # retry 3 times in case of generation error
+                formated_prompt = classify_email_prompt_template.format(
+                    fixed_categories=fixed_categories_str,
+                    user_key_tags=user_key_tags_str,
+                    fixed_actions=fixed_actions_str,
+                    history_examples=history_examples,
+                    email_sender=extracted_outlook.sender_email,
+                    email_subject=extracted_outlook.subject,
+                    email_marked_promotion="Unknown",
+                    summary_by_llm=email_summary_json["summary"],
+                    tags_by_llm=email_summary_json["tags"],
+                )
+                classify_response = chat_model.invoke(formated_prompt)
+                classify_json = json.loads(classify_response.content)
+                if classify_json["category"] in fixed_categories and classify_json["action"] in fixed_actions:
+                    break
+
+                if i == 2:
+                    raise ResponseCode.InternalUnknownError.create_error("email classification failed after 3 retries")
 
             email_db_records.append(
                 Email(

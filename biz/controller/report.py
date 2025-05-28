@@ -394,12 +394,13 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
     formated_prompt = generate_email_reply_prompt_template.format(
         email_sender=corresponding_mail_item.sender,
         email_subject=corresponding_mail_item.subject,
-        email_body=extracted_email.body,
+        email_body=extracted_email.cleaned_body,
         username=user.name,
         reply_history=reply_history,
     )
 
     def streaming_reply_gen():
+        logger.info("start generating reply for email")
         chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
         for chunk in chat_model.stream(formated_prompt):
             yield chunk.content
