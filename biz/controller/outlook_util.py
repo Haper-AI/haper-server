@@ -10,37 +10,20 @@ from msgraph.generated.models.recipient import Recipient
 from msgraph.generated.models.subscription import Subscription
 from msgraph.generated.users.item.messages.item.reply.reply_post_request_body import ReplyPostRequestBody
 
+from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
 from biz.service.aws.sm import get_outlook_sub_public_b64
+from biz.utils import extract_visible_text_from_email
 from biz.utils.env import RuntimeEnv
 from msgraph import GraphServiceClient
 from azure.core.credentials import AccessToken
 
-class OutlookInfo:
-    message_id: str
-    thread_id: str
-    mime_type: str
-    receive_at: datetime
-    sender: str
-    sender_name: str
-    sender_email: str
-    to: str
-    subject: str
-    body: str
 
+class OutlookInfo(ExtractedMail):
     def __init__(self):
-        self.message_id = ""
-        self.thread_id = ""
-        self.mime_type = ""
-        self.receive_at = datetime.now(timezone.utc)
-        self.sender = ""
-        self.sender_name = ""
-        self.sender_email = ""
-        self.to = ""
-        self.subject = ""
-        self.body = ""
+        super().__init__()
 
 
-def extract_outlook_info(email_info: Message):
+def extract_outlook_info(email_info: Message, clean_html=True) -> OutlookInfo:
     extracted_outlook_info = OutlookInfo()
     extracted_outlook_info.message_id = email_info.id
     extracted_outlook_info.thread_id = email_info.conversation_id
@@ -54,13 +37,24 @@ def extract_outlook_info(email_info: Message):
     extracted_outlook_info.to = recipient_info_dict.address
     extracted_outlook_info.subject = email_info.subject
     body_info_dict = email_info.body
-    extracted_outlook_info.mime_type = body_info_dict.content_type
+
+    # get body type and do cleaning if needed
+    if body_info_dict.content_type == BodyType.Html:
+        extracted_outlook_info.mime_type = EmailBodyType.Html
+        if clean_html:
+            extracted_outlook_info.cleaned_body = extract_visible_text_from_email(body_info_dict.content)
+    elif body_info_dict.content_type == BodyType.Text:
+        extracted_outlook_info.mime_type = EmailBodyType.Text
+
     extracted_outlook_info.body = body_info_dict.content
+    if not extracted_outlook_info.cleaned_body: # assign cleaned body to body if not already set
+        extracted_outlook_info.cleaned_body = extracted_outlook_info.body
 
     return extracted_outlook_info
 
 
 _RefreshAccessTokenEndpoint = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+
 
 class RawAccessTokenProvider:
     """
@@ -88,6 +82,7 @@ class RawAccessTokenProvider:
             if "refresh_token" in resp_json:
                 self.refresh_token = resp_json["refresh_token"]
         return AccessToken(self.access_token, self.expires_at)
+
 
 class OutlookAPIClient:
     def __init__(self, access_token: str, refresh_token: str, expires_at: int):
@@ -126,13 +121,12 @@ class OutlookAPIClient:
         return subscription_id, int(watch_expires_at.timestamp())
 
     def refresh_watch_outlook(self, subscription_id: str):
-        watch_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10070) # 10 minutes less than 1 week
+        watch_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10070)  # 10 minutes less than 1 week
         request_body = Subscription(
             expiration_date_time=watch_expires_at,
         )
         asyncio.run(self.client.subscriptions.by_subscription_id(subscription_id).patch(request_body))
         return int(watch_expires_at.timestamp())
-
 
     def stop_watch_outlook(self, subscription_id: str):
         asyncio.run(self.client.subscriptions.by_subscription_id(subscription_id).delete())

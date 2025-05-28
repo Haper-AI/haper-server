@@ -2,6 +2,8 @@ import os
 import re
 import traceback
 
+from bs4 import BeautifulSoup, Comment
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -27,3 +29,23 @@ def split_email_str(email_str):
         return match.group(1).strip(), match.group(2).strip()
 
     return None, None
+
+
+def extract_visible_text_from_email(html_content: str) -> str:
+    # Parse HTML
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Remove script, style, head, meta, and other non-visible tags
+    for tag in soup(["script", "style", "head", "meta", "title", "noscript"]):
+        tag.decompose()
+
+    # Optionally, remove comments
+    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        comment.extract()
+
+    # Extract and return visible text
+    text = soup.get_text(strip=True, separator="\n")
+
+    # Normalize whitespace: remove extra blank lines and spaces
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return "\n".join(lines)

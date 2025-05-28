@@ -11,10 +11,10 @@ from sqlalchemy.orm import make_transient
 
 from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.user import AccountProvider
-from biz.dal.email import Email
+from biz.dal.email import Email, EmailSource
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, BatchActionRunStatus
-from biz.dal.user import User, Account
+from biz.dal.user import User
 from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
 from biz.model import ReportFieldName
@@ -26,6 +26,8 @@ from biz.model.report import action_log as action_log_model
 
 from tests import generate_random_gmail, generate_random_string
 from tests.handlers.unit.conftest import db_add_new_account
+
+embeddings = [random.uniform(-1, 1) for _ in range(768)]
 
 
 @pytest.fixture
@@ -45,6 +47,57 @@ def new_user_report():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
+        message_ids = [generate_random_string(8) for _ in range(3)]
+        emails = [
+            Email(
+                user_id=user.id,
+                source=EmailSource.Gmail,
+                message_id=message_ids[0],
+                thread_id=message_ids[0],
+                sender=generate_random_gmail(8),
+                receiver=generate_random_gmail(8),
+                subject="subject",
+                receive_at=datetime.now(timezone.utc),
+                tags=["tag1", "tag2"],
+                summary="some summary",
+                summary_embedding=embeddings,
+                llm_category=MessageCategory.Essential,
+                llm_action=MessageAction.Read,
+            ),
+            Email(
+                user_id=user.id,
+                source=EmailSource.Gmail,
+                message_id=message_ids[1],
+                thread_id=message_ids[1],
+                sender=generate_random_gmail(8),
+                receiver=generate_random_gmail(8),
+                subject="subject",
+                receive_at=datetime.now(timezone.utc),
+                tags=["tag1", "tag2"],
+                summary="some summary",
+                summary_embedding=embeddings,
+                llm_category=MessageCategory.Essential,
+                llm_action=MessageAction.Reply,
+                reply_message="some reply message",
+            ),
+            Email(
+                user_id=user.id,
+                source=EmailSource.Gmail,
+                message_id=message_ids[2],
+                thread_id=message_ids[2],
+                sender=generate_random_gmail(8),
+                receiver=generate_random_gmail(8),
+                subject="subject",
+                receive_at=datetime.now(timezone.utc),
+                tags=["tag1", "tag2"],
+                summary="some summary",
+                summary_embedding=embeddings,
+                llm_category=MessageCategory.NonEssential,
+                llm_action=MessageAction.Delete,
+            )
+        ]
+        session.add_all(emails)
+        session.flush()
         report_obj = report_model.Report(
             messages_in_queue={},
             summary=[
@@ -64,53 +117,53 @@ def new_user_report():
                 )
             ],
             content=report_model.ReportContent(
-                content_sources=["gmail"],
+                content_sources=[EmailSource.Gmail],
                 gmail=[
                     report_model.MailMessagesByAccount(
                         account_id=str(account.id),
                         email=email,
                         messages=[
                             report_model.MailMessageItem(
-                                id=0,
-                                action=MessageAction.Read,
+                                id=emails[0].id,
+                                action=emails[0].llm_action,
                                 action_result=None,
-                                message_id="message_id_0",
-                                thread_id="thread_id_0",
-                                receive_at=datetime.now(timezone.utc),
-                                sender=generate_random_gmail(8),
-                                subject="subject",
-                                summary="some summary",
-                                category=MessageCategory.Essential,
-                                tags=["tag1", "tag2"],
-                                reply_message=None
+                                message_id=emails[0].message_id,
+                                thread_id=emails[0].thread_id,
+                                receive_at=emails[0].receive_at,
+                                sender=emails[0].sender,
+                                subject=emails[0].subject,
+                                summary=emails[0].summary,
+                                category=emails[0].llm_category,
+                                tags=emails[0].tags,
+                                reply_message=emails[0].reply_message,
                             ),
                             report_model.MailMessageItem(
-                                id=1,
-                                action=MessageAction.Reply,
+                                id=emails[1].id,
+                                action=emails[1].llm_action,
                                 action_result=None,
-                                message_id="message_id_1",
-                                thread_id="thread_id_1",
-                                receive_at=datetime.now(timezone.utc),
-                                sender=generate_random_gmail(8),
-                                subject="subject",
-                                summary="some summary",
-                                category=MessageCategory.Essential,
-                                tags=["tag1", "tag2"],
-                                reply_message="some reply message",
+                                message_id=emails[1].message_id,
+                                thread_id=emails[1].thread_id,
+                                receive_at=emails[1].receive_at,
+                                sender=emails[1].sender,
+                                subject=emails[1].subject,
+                                summary=emails[1].summary,
+                                category=emails[1].llm_category,
+                                tags=emails[1].tags,
+                                reply_message=emails[1].reply_message,
                             ),
                             report_model.MailMessageItem(
-                                id=2,
-                                action=MessageAction.Delete,
+                                id=emails[2].id,
+                                action=emails[2].llm_action,
                                 action_result=None,
-                                message_id="message_id_2",
-                                thread_id="thread_id_2",
-                                receive_at=datetime.now(timezone.utc),
-                                sender=generate_random_gmail(8),
-                                subject="subject",
-                                summary="some summary",
-                                category=MessageCategory.NonEssential,
-                                tags=["tag1", "tag2"],
-                                reply_message=None
+                                message_id=emails[2].message_id,
+                                thread_id=emails[2].thread_id,
+                                receive_at=emails[2].receive_at,
+                                sender=emails[2].sender,
+                                subject=emails[2].subject,
+                                summary=emails[2].summary,
+                                category=emails[2].llm_category,
+                                tags=emails[2].tags,
+                                reply_message=emails[2].reply_message,
                             )
                         ]
                     )
@@ -154,7 +207,7 @@ def new_user_report_with_done_action():
                 )
             ],
             content=report_model.ReportContent(
-                content_sources=["gmail"],
+                content_sources=[EmailSource.Gmail],
                 gmail=[
                     report_model.MailMessagesByAccount(
                         account_id=str(account.id),
@@ -217,7 +270,7 @@ def new_user_report_with_reply_action_and_no_reply_message():
                 )
             ],
             content=report_model.ReportContent(
-                content_sources=["gmail"],
+                content_sources=[EmailSource.Gmail],
                 gmail=[
                     report_model.MailMessagesByAccount(
                         account_id=str(account.id),
@@ -426,11 +479,12 @@ class TestUpdateReport:
         with get_session(write=True) as session:
             Report.update(session, report.id, status=ReportStatus.Finalized)
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        report_obj = report_model.Report.from_dict(report.content)
         response = client.put("/api/v1/report/{}".format(report.id), json={
             "gmail": {
                 str(account.id): [
                     {
-                        "id": 0,
+                        "id": report_obj.content.gmail[0].messages[0].id,
                         "action": MessageAction.Reply,
                         "category": MessageCategory.Essential,
                         "reply_message": """
@@ -443,12 +497,12 @@ class TestUpdateReport:
                         """
                     },
                     {
-                        "id": 1,
+                        "id": report_obj.content.gmail[0].messages[1].id,
                         "action": MessageAction.Delete,
                         "category": MessageCategory.NonEssential,
                     },
                     {
-                        "id": 2,
+                        "id": report_obj.content.gmail[0].messages[2].id,
                         "category": MessageCategory.Essential,
                     }
                 ]
@@ -711,9 +765,10 @@ class TestPollReportRunStatus:
 @pytest.fixture(scope="module")
 def patch_gmail_get_message():
     mock_gmail_client = MagicMock()
-    mock_gmail_client.users().messages().get.return_value.execute = MagicMock(side_effect=[
+
+    def mock_get_message(*args):
         # email data 1
-        {
+        return {
             "snippet": "some snippet",
             "labelIds": [
                 "CATEGORY_PROMOTIONS",
@@ -745,8 +800,8 @@ def patch_gmail_get_message():
                 }
             }
         }
-    ])
-    mock_gmail_client.users().stop.return_value.execute.return_value = {}
+
+    mock_gmail_client.users().messages().get.return_value.execute = mock_get_message
 
     mock_credential = MagicMock()
     mock_credential.token = generate_random_string(10)
@@ -769,13 +824,10 @@ def patch_langchain_chat_model():
             yield tmp
             time.sleep(0.4)
 
-    mock_chat_model.stream.side_effect = chat_model_streaming
+    mock_chat_model.stream = chat_model_streaming
 
     with patch('biz.controller.report.init_chat_model', return_value=mock_chat_model) as mock_init_chat_model:
         yield mock_init_chat_model
-
-
-embeddings = [random.uniform(-1, 1) for _ in range(768)]
 
 
 class TestGenerateMessageReply:
@@ -783,14 +835,14 @@ class TestGenerateMessageReply:
     @pytest.mark.usefixtures("patch_langchain_chat_model")
     def test_success(self, client, new_user_report):
         user, account, report = new_user_report
-        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
         with get_session(write=True) as session:
             UserSubscription.add(session, str(user.id), generate_random_string(20),
                                  generate_random_string(20), "month", "active")
             Report.update(session, report.id, status=ReportStatus.Finalized)
+
+            # insert similar email as reply history
             session.add_all([
                 Email(
-                    id=0,
                     user_id=user.id,
                     source="gmail",
                     message_id="message-id-1",
@@ -798,7 +850,7 @@ class TestGenerateMessageReply:
                     sender="some one <someone@gmail.com>",
                     receiver="receiver@gmail.com",
                     subject="some subject",
-                    received_at=datetime.now(timezone.utc),
+                    receive_at=datetime.now(timezone.utc),
                     tags=["tag1", "tag2"],
                     summary="some summary",
                     summary_embedding=embeddings,
@@ -807,7 +859,6 @@ class TestGenerateMessageReply:
                     reply_message="Some reply message 1"
                 ),
                 Email(
-                    id=1,
                     user_id=user.id,
                     source="gmail",
                     message_id="message-id-2",
@@ -815,7 +866,7 @@ class TestGenerateMessageReply:
                     sender="some one <someone@gmail.com>",
                     receiver="receiver@gmail.com",
                     subject="some subject",
-                    received_at=datetime.now(timezone.utc),
+                    receive_at=datetime.now(timezone.utc),
                     tags=["tag3", "tag4"],
                     summary="some summary",
                     summary_embedding=embeddings,
@@ -824,10 +875,13 @@ class TestGenerateMessageReply:
                     reply_message="Some reply message 2"
                 ),
             ])
+
+        report_obj = report_model.Report.from_dict(report.content)
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
         response = client.post("/api/v1/report/{}/generate-reply".format(report.id), json={
             "source": "gmail",
             "account_id": str(account.id),
-            "id": 1
+            "id": report_obj.content.gmail[0].messages[1].id
         })
         assert response.status_code == 200
         assert 'text/event-stream' in response.headers['Content-Type']
@@ -884,3 +938,18 @@ class TestGenerateMessageReply:
                 "id": 0
             })
             assert response.status_code == 400
+
+
+class TestGetMessageContent:
+    @pytest.mark.usefixtures("patch_gmail_get_message")
+    def test_success(self, client, new_user_report):
+        user, account, report = new_user_report
+        report_obj = report_model.Report.from_dict(report.content)
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+        response = client.get("/api/v1/report/{}/message-content".format(report.id), query_string={
+            "source": "gmail",
+            "account_id": str(account.id),
+            "id": report_obj.content.gmail[0].messages[0].id
+        })
+        assert response.status_code == 200
+        assert response.data

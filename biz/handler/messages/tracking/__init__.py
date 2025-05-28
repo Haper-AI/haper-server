@@ -53,7 +53,7 @@ class StartMessageTrackingReq(BaseModel):
 
 @tracking_routes.route("/start", methods=["POST"])
 @catch_error
-@user_auth(check_subscription=True)
+@user_auth(check_subscription=False)
 def start_message_tracking():
     resp = HTTPResponse(request.method, request.path)
     req = StartMessageTrackingReq(**request.get_json())

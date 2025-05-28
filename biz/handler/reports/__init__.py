@@ -148,7 +148,7 @@ def update_report_info(report_id: str):
 
 @report_routes.route("/<uuid:report_id>/batch-action", methods=["POST"])
 @catch_error
-@user_auth(check_subscription=True)
+@user_auth(check_subscription=False)
 def report_batch_action(report_id: str):
     resp = HTTPResponse(request.method, request.path)
     run_id = report_ctrl.apply_report_actions(request.ctx.user_id, report_id)
@@ -235,7 +235,7 @@ class GenerateMessageReplyReq(BaseModel):
 
 @report_routes.route("/<uuid:report_id>/generate-reply", methods=["POST"])
 @catch_error
-@user_auth(check_subscription=True)
+@user_auth(check_subscription=False)
 @user_limiter.limit("1 per 3 second;100 per day")
 def generate_message_reply(report_id: str):
     req = GenerateMessageReplyReq(**request.get_json())
@@ -248,5 +248,36 @@ def generate_message_reply(report_id: str):
     )
     return Response(streaming_reply_gen(), content_type="text/event-stream")
 
+
+class GetMessageContentReq(BaseModel):
+    source: str
+    account_id: str
+    id: int
+
+
+@report_routes.route("/<uuid:report_id>/message-content")
+@catch_error
+@user_auth()
+@user_limiter.limit("2 per 1 second")
+def get_message_content(report_id: str):
+    resp = HTTPResponse(request.method, request.path)
+    req = GetMessageContentReq(**request.args.to_dict())
+    _, extracted_email = report_ctrl.get_message_content(
+        request.ctx.user_id,
+        report_id,
+        req.source,
+        req.account_id,
+        req.id,
+    )
+    resp.set_data({
+        "message_content": {
+            "subject": extracted_email.subject,
+            "from": extracted_email.sender,
+            "to": extracted_email.to,
+            "mime_type": extracted_email.mime_type,
+            "body": extracted_email.body,
+        }
+    })
+    return resp.return_with_log()
 
 __all__ = ['report_routes']

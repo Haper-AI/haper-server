@@ -104,6 +104,11 @@ def delete_report_by_id(user_id: str, report_id: str):
         if report.status == ReportStatus.Appending:
             raise ResponseCode.UnsupportedAction.create_error("current report is still processing incoming messages")
 
+        report_obj = report_model.Report.from_dict(report.content)
+        for mail_message_by_account in (report_obj.content.gmail or []) + (report_obj.content.outlook or []):
+            for m in mail_message_by_account.messages:
+                Email.mark_deleted(session, m.id)
+
         Report.mark_deleted(session, report_id)
 
 
@@ -130,7 +135,7 @@ class ReportUpdateInfo(BaseModel):
         return self
 
 
-def check_can_op_on_report_and_parse_content(session: Session, user_id: str, report: Report):
+def _check_can_op_on_report_and_parse_content(session: Session, user_id: str, report: Report):
     if not report:
         raise ResponseCode.InvalidParam.create_error("no report found")
 
@@ -161,11 +166,29 @@ def check_can_op_on_report_and_parse_content(session: Session, user_id: str, rep
     return report_content_obj
 
 
+def _search_corresponding_mail_item(messages_by_account: List[report_model.MailMessagesByAccount], account_id: str,
+                                    id: int):
+    corresponding_mail_item = None
+    for messages_by_account in messages_by_account:
+        if corresponding_mail_item:
+            break
+        if messages_by_account.account_id == account_id:
+            for mail_item in messages_by_account.messages:
+                if mail_item.id == id:
+                    corresponding_mail_item = mail_item
+                    break
+
+    if not corresponding_mail_item:
+        raise ResponseCode.InvalidParam.create_error("not corresponding gmail message in current report")
+
+    return corresponding_mail_item
+
+
 def update_report_info(user_id: str, report_id: str, all_updates: ReportUpdateInfo):
     with get_session(write=True) as session:
         report = Report.get_by_id(session, report_id, for_update=True)
 
-        report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
+        report_content_obj = _check_can_op_on_report_and_parse_content(session, user_id, report)
         # update
         ## map update_info by account_id, then by id
         mapped_update_info: Dict[str, Dict[int, ReportUpdateInfo.InfoUpdates]] = {}
@@ -239,7 +262,7 @@ def apply_report_actions(user_id: str, report_id: str):
     with get_session(write=True) as session:
         report = Report.get_by_id(session, report_id, for_update=True)
 
-        report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
+        report_content_obj = _check_can_op_on_report_and_parse_content(session, user_id, report)
         # get total actions to run
         total_count = 0
         for messages_by_account in report_content_obj.gmail:
@@ -319,69 +342,90 @@ generate_email_reply_prompt_template = ChatPromptTemplate.from_template(
 )
 
 
-def _search_corresponding_mail_item(messages_by_account: List[report_model.MailMessagesByAccount], account_id: str,
-                                    id: int):
-    corresponding_mail_item = None
-    for messages_by_account in messages_by_account:
-        if corresponding_mail_item:
-            break
-        if messages_by_account.account_id == account_id:
-            for gmail_item in messages_by_account.messages:
-                if gmail_item.id == id:
-                    if gmail_item.action != MessageAction.Reply:
-                        raise ResponseCode.UnsupportedAction.create_error(
-                            "the action for current message is not reply"
-                        )
-                    if gmail_item.action_result == MessageActionResult.Success:
-                        raise ResponseCode.UnsupportedAction.create_error(
-                            "the action for current message already done")
-
-                    corresponding_mail_item = gmail_item
-                    break
-
-    if not corresponding_mail_item:
-        raise ResponseCode.InvalidParam.create_error("not corresponding gmail message in current report")
-
-    return corresponding_mail_item
-
-
-# TODO: clean redundant code
 def generate_message_reply(user_id: str, report_id: str, source: str, account_id: str, id: int):
     with get_session(write=False) as session:
         user = User.get_by_id(session, user_id)
         report = Report.get_by_id(session, report_id)
 
-    report_content_obj = check_can_op_on_report_and_parse_content(session, user_id, report)
+    report_content_obj = _check_can_op_on_report_and_parse_content(session, user_id, report)
+    corresponding_mail_item, extracted_email = get_message_content(
+        user_id, report_id, source, account_id, id,
+        report=report,
+        report_content_obj=report_content_obj,
+        check_permission=False
+    )
+
+    if corresponding_mail_item.action != MessageAction.Reply:
+        raise ResponseCode.UnsupportedAction.create_error(
+            "the action for current message is not reply"
+        )
+    if corresponding_mail_item.action_result == MessageActionResult.Success:
+        raise ResponseCode.UnsupportedAction.create_error(
+            "the action for current message already done")
+
+    # start generate
+    ## retrival relevant email with reply_message
+    email_history = None
+    with get_session(write=False) as session:
+        email = Email.get_by_id(session, id)
+        if email:
+            email_history = Email.list_by_similarity(
+                session,
+                user_id,
+                email.summary_embedding,
+                require_reply_message=True,
+                exclude_ids=[id]
+            )
+        else:
+            logger.warning("No email found for id {}".format(id))
+
+    reply_history = None
+    if email_history:
+        history_email_json_list = [json.dumps({
+            "sender": e.sender,
+            "subject": e.subject,
+            "summary": e.summary,
+            "reply_history": e.reply_message,
+        }, ensure_ascii=False) for e in email_history]
+        reply_history = "\n    ".join([f'  - {e}' for e in history_email_json_list])
+    else:
+        logger.info("No similar email history found")
+
+    formated_prompt = generate_email_reply_prompt_template.format(
+        email_sender=corresponding_mail_item.sender,
+        email_subject=corresponding_mail_item.subject,
+        email_body=extracted_email.body,
+        username=user.name,
+        reply_history=reply_history,
+    )
+
+    def streaming_reply_gen():
+        chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
+        for chunk in chat_model.stream(formated_prompt):
+            yield chunk.content
+
+    return streaming_reply_gen
+
+
+def get_message_content(user_id: str, report_id: str, source: str, account_id: str, id: int, report=None,
+                        report_content_obj=None, check_permission=True):
+    if not report:
+        with get_session(write=False) as session:
+            report = Report.get_by_id(session, report_id)
+
+    if not report:
+        raise ResponseCode.InvalidParam.create_error("no report found")
+
+    if check_permission:
+        if str(report.user_id) != user_id:
+            raise ResponseCode.UnsupportedAction.create_error("current user does not has permission for this report")
+
+    if not report_content_obj:
+        report_content_obj = report_model.ReportContent.from_dict(report.content["content"])
+
     if source == EmailSource.Gmail:
         corresponding_mail_item = _search_corresponding_mail_item(report_content_obj.gmail, account_id, id)
         # start generate
-        ## retrival relevant email with reply_message
-        email_history = None
-        with get_session(write=False) as session:
-            email = Email.get_by_id(session, id)
-            if email:
-                email_history = Email.list_by_similarity(
-                    session,
-                    user_id,
-                    email.summary_embedding,
-                    require_reply_message=True,
-                    exclude_ids=[id]
-                )
-            else:
-                logger.warning("No email found for id {}".format(id))
-
-        reply_history = None
-        if email_history:
-            history_email_json_list = [json.dumps({
-                "sender": e.sender,
-                "subject": e.subject,
-                "summary": e.summary,
-                "reply_history": e.reply_message,
-            }, ensure_ascii=False) for e in email_history]
-            reply_history = "\n    ".join([f'  - {e}' for e in history_email_json_list])
-        else:
-            logger.info("No similar email history found")
-
         ## get email body
         with get_session(write=False) as session:
             account = Account.get_by_id(session, account_id)
@@ -396,15 +440,7 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
                 logger.error("Error getting gmail email: {}".format(e))
                 raise ResponseCode.InternalUnknownError.create_error("getting gmail email failed")
 
-        extract_gmail = extract_gmail_info(raw_email)
-
-        formated_prompt = generate_email_reply_prompt_template.format(
-            email_sender=corresponding_mail_item.sender,
-            email_subject=corresponding_mail_item.subject,
-            email_body=extract_gmail.body,
-            username=user.name,
-            reply_history=reply_history,
-        )
+        extracted_email = extract_gmail_info(raw_email)
 
         if gmail_api_client.access_token != account.access_token:
             with get_session(write=True) as session:
@@ -415,42 +451,8 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
                     expires_at=gmail_api_client.expires_at
                 )
 
-        def streaming_reply_gen():
-            chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
-            for chunk in chat_model.stream(formated_prompt):
-                yield chunk.content
-
-        return streaming_reply_gen
     elif source == EmailSource.Outlook:
         corresponding_mail_item = _search_corresponding_mail_item(report_content_obj.outlook, account_id, id)
-        # start generate
-        ## retrival relevant email with reply_message
-        email_history = None
-        with get_session(write=False) as session:
-            email = Email.get_by_id(session, id)
-            if email:
-                email_history = Email.list_by_similarity(
-                    session,
-                    user_id,
-                    email.summary_embedding,
-                    require_reply_message=True,
-                    exclude_ids=[id]
-                )
-            else:
-                logger.warning("No email found for id {}".format(id))
-
-        reply_history = None
-        if email_history:
-            history_email_json_list = [json.dumps({
-                "sender": e.sender,
-                "subject": e.subject,
-                "summary": e.summary,
-                "reply_history": e.reply_message,
-            }, ensure_ascii=False) for e in email_history]
-            reply_history = "\n    ".join([f'  - {e}' for e in history_email_json_list])
-        else:
-            logger.info("No similar email history found")
-
         ## get email body
         with get_session(write=False) as session:
             account = Account.get_by_id(session, account_id)
@@ -465,26 +467,17 @@ def generate_message_reply(user_id: str, report_id: str, source: str, account_id
                 logger.error("Error getting outlook email: {}".format(e))
                 raise ResponseCode.InternalUnknownError.create_error("getting outlook email failed")
 
-        extract_gmail = extract_outlook_info(raw_email)
-
-        formated_prompt = generate_email_reply_prompt_template.format(
-            email_sender=corresponding_mail_item.sender,
-            email_subject=corresponding_mail_item.subject,
-            email_body=extract_gmail.body,
-            username=user.name,
-            reply_history=reply_history,
-        )
-
+        extracted_email = extract_outlook_info(raw_email)
         if outlook_api_client.access_token != account.access_token:
             with get_session(write=True) as session:
-                Account.update(session, account.id, outlook_api_client.access_token, outlook_api_client.refresh_token,
-                               outlook_api_client.expires_at)
-
-        def streaming_reply_gen():
-            chat_model = init_chat_model("gpt-4o-mini", model_provider="openai")
-            for chunk in chat_model.stream(formated_prompt):
-                yield chunk
-
-        return streaming_reply_gen
+                Account.update(
+                    session,
+                    account.id,
+                    outlook_api_client.access_token,
+                    outlook_api_client.refresh_token,
+                    outlook_api_client.expires_at
+                )
     else:
         raise ResponseCode.UnsupportedAction.create_error("unknown source")
+
+    return corresponding_mail_item, extracted_email

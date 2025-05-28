@@ -7,6 +7,7 @@ from sqlalchemy.orm import make_transient
 from app.consumer_main import handle_report_batch_action
 from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
+from biz.dal.email import EmailSource
 from biz.dal.user import AccountProvider
 from biz.dal.report import MessageAction, MessageCategory, Report, ReportStatus
 from biz.dal.report_batch_action import ReportBatchAction
@@ -87,7 +88,7 @@ def new_user_report():
             messages_in_queue={},
             summary=[],
             content=report_model.ReportContent(
-                content_sources=["gmail", "outlook"],
+                content_sources=[EmailSource.Gmail, EmailSource.Outlook],
                 gmail=[
                     report_model.MailMessagesByAccount(
                         account_id=str(account_1.id),
