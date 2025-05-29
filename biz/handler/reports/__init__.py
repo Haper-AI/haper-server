@@ -172,7 +172,7 @@ class BatchActionStatusInfos:
             "succeed": self.succeed,
             "failed": self.failed,
             "status": self.status,
-            "logs": self.logs,
+            # "logs": self.logs,
         }
 
 
@@ -202,6 +202,7 @@ def poll_batch_action_run_status(run_id: str, last_info: BatchActionStatusInfos)
                     yield json.dumps(last_info.to_dict())
 
                 if run_status.status == BatchActionRunStatus.Done:
+                    logger.info("Poll batch action run status is done")
                     break
         except GeneratorExit:
             logger.info("Client disconnected")

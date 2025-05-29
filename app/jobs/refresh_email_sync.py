@@ -23,7 +23,8 @@ def job_main():
 
         for record in message_tracking_records:
             if record.account_provider == AccountProvider.Google:
-                if int((datetime.now() + timedelta(days=6)).timestamp()) > record.extra_info[
+                # sync with gmail watch every 12 hours
+                if int((datetime.now() + timedelta(days=6, hours=12)).timestamp()) > record.extra_info[
                     MessageTrackingStatusExtraInfoKeys.Expiration]:
                     # rewatch gmail
 
@@ -80,3 +81,6 @@ def job_main():
 def handler(event, context):
     init_job()
     job_main()
+
+if __name__ == "__main__":
+    handler(None, None)

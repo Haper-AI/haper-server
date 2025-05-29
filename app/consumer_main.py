@@ -42,7 +42,7 @@ def handle_report_update(the_message: ReportUpdateMessage):
                 emails.append(RawGmailInfo(new_gmail_msg.message_id, new_gmail_msg.thread_id, email_info))
             except HttpError as e:
                 if e.resp.status == 404:
-                    logger.warning(f"Gmail not found: {new_gmail_msg.message_id}")
+                    logger.warning(f"Gmail not found: {new_gmail_msg.message_id} for email {account.email}")
                     continue
 
         # use llm process found email info
@@ -77,7 +77,7 @@ def handle_report_update(the_message: ReportUpdateMessage):
                 emails.append(result)
             except APIError as e:
                 if e.response_status_code == 404:
-                    logger.warning(f"Outlook mail not found: {mail_id}")
+                    logger.warning(f"Outlook mail not found: {mail_id} for email {account.email}")
                     continue
 
         # use llm process email info
@@ -220,6 +220,7 @@ def init():
     init_db()
     init_sqs()
 
+
 if __name__ == '__main__':
     logger.info('Agent service starting up...')
     init()
@@ -250,8 +251,6 @@ if __name__ == '__main__':
                     )
                     continue
 
-                receive_count = int(message['Attributes']['ApproximateReceiveCount'])
-
                 try:
                     sqs_message_obj = sqs_message_model.sqs_message_from_dict(json.loads(message['Body']))
                     if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE:
@@ -263,15 +262,11 @@ if __name__ == '__main__':
                     logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
                     logger.error(f"Error processing message: {message['MessageId']}, error: {e}")
 
-                    # release message by change visibility timeout or leave it to the dead letter queue
-                    if receive_count >= RuntimeEnv.Instance().SQS_MAX_RETRIES:
-                        logger.error(f"Message {message['MessageId']} exceeded max retries, moving to dead letter queue")
-                    else:
-                        get_sqs_client().change_message_visibility(
-                            QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
-                            ReceiptHandle=message['ReceiptHandle'],
-                            VisibilityTimeout=0  # make it visible again
-                        )
+                    get_sqs_client().change_message_visibility(
+                        QueueUrl=RuntimeEnv.Instance().SQS_REPORT_ASYNC_ACTION_QUEUE_URL,
+                        ReceiptHandle=message['ReceiptHandle'],
+                        VisibilityTimeout=0  # make it visible again
+                    )
 
                     continue
 

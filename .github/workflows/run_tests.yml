@@ -45,7 +45,6 @@ jobs:
       POSTGRES_DSN: "" # doesn't have to set up this env as it will be replaced during pytest fixture code
       SQS_REGION: us-east-1
       SQS_ENDPOINT: "http://localhost:4566"
-      SQS_MAX_RETRIES: 5
       AWS_ACCESS_KEY_ID: dummy
       AWS_SECRET_ACCESS_KEY: dummy
       STRIPE_API_KEY: pk_test_dummy
