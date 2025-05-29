@@ -53,6 +53,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive # This ensures submodules (including nested ones) are initialized and updated
+          fetch-depth: 0        # Required to fetch all history, especially useful for submodules
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v4
