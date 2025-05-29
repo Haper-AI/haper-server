@@ -1,19 +1,17 @@
-from datetime import datetime
 from typing import List, Dict
 
 from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.email import EmailSource
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus, MessageTrackingStatusExtraInfoKeys
-from biz.dal.report import Report, ReportStatus
+from biz.dal.report import Report
 from biz.dal.user import Account
-from biz.dal.user_setting import UserSetting, DEFAULT_REPORT_MAX_TIME_DURATION
-from biz.model import ReportFieldName
+from biz.utils.report import ReportFieldName
 from biz.service.db import get_session
 from biz.service.aws.sqs import send_report_update_message
-from biz.model.report import report_update_message as rum_model
+from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.utils.logger import logger
-from biz.model.report import report as report_model
+from haper_script.schema_gen.python import report as report_model
 
 
 # TODO: to avoid duplicate message process, use redis to cache processed message ids

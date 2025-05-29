@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
 from biz.utils import split_email_str, extract_visible_text_from_email
 from biz.utils.env import RuntimeEnv
-from biz.model.report import report_update_message as rum_model
+from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.utils.logger import logger
 
 

@@ -4,10 +4,10 @@ import uuid
 import boto3
 from botocore.client import BaseClient
 
-from biz.model.report import sqs_message as sqs_message_model
-from biz.model.report.report_batch_action_message import ReportBatchActionMessage
-from biz.model.report.report_update_message import ReportUpdateMessage
-from biz.model.report.sqs_message import ActionType
+from haper_script.schema_gen.python import sqs_message as sqs_message_model
+from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
+from haper_script.schema_gen.python.report_update_message import ReportUpdateMessage
+from haper_script.schema_gen.python.sqs_message import ActionType
 from biz.utils.env import RuntimeEnv
 
 _sqs_client: BaseClient

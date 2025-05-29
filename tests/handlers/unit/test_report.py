@@ -17,12 +17,12 @@ from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, 
 from biz.dal.user import User
 from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
-from biz.model import ReportFieldName
+from biz.utils.report import ReportFieldName
 from biz.service.db import get_session
-from biz.model.report import report as report_model
-from biz.model.report import rich_text as rich_text_model
+from haper_script.schema_gen.python import report as report_model
+from haper_script.schema_gen.python import rich_text as rich_text_model
 from biz.utils.env import RuntimeEnv
-from biz.model.report import action_log as action_log_model
+from haper_script.schema_gen.python import action_log as action_log_model
 
 from tests import generate_random_gmail, generate_random_string
 from tests.handlers.unit.conftest import db_add_new_account

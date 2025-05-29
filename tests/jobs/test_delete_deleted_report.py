@@ -4,7 +4,7 @@ from app.jobs.delete_marked_deleted_report import init_job, job_main
 from biz.dal.email import EmailSource, Email
 from biz.dal.report import Report, MessageAction, MessageCategory
 from biz.dal.user import User
-from biz.model.report import report as report_model
+from haper_script.schema_gen.python import report as report_model
 from biz.service.db import get_session
 from tests import generate_random_gmail
 

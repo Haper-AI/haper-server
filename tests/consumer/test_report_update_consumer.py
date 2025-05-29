@@ -20,9 +20,9 @@ from biz.controller.report_update import example_summary
 from biz.dal.email import Email
 from biz.dal.report import Report, MessageCategory, MessageAction
 from biz.dal.user import User, Account, AccountProvider
-from biz.model.report import report_update_message as rum_model
+from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.service.db import get_session
-from biz.model.report import report as report_model
+from haper_script.schema_gen.python import report as report_model
 from tests import generate_random_gmail, generate_random_string
 
 

@@ -8,7 +8,7 @@ from pydantic import BaseModel, PositiveInt
 from biz.controller import report as report_ctrl
 from biz.dal.report_batch_action import BatchActionRunStatus
 from biz.handler.middleware import catch_error, user_auth
-from biz.model import ReportFieldName
+from biz.utils.report import ReportFieldName
 from biz.service.rate_limiter import user_limiter
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse

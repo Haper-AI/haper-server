@@ -13,8 +13,8 @@ from biz.dal.report import MessageAction, MessageCategory, Report, ReportStatus
 from biz.dal.report_batch_action import ReportBatchAction
 from biz.dal.user import User, Account
 from biz.service.db import get_session
-from biz.model.report import report as report_model
-from biz.model.report.report_batch_action_message import ReportBatchActionMessage
+from haper_script.schema_gen.python import report as report_model
+from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
 from tests import generate_random_string, generate_random_gmail, generate_random_outlook_email
 
 

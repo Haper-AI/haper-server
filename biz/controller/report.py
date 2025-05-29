@@ -15,14 +15,14 @@ from biz.controller.outlook_util import extract_outlook_info, OutlookAPIClient
 from biz.dal.email import Email, EmailSource
 from biz.dal.report_batch_action import ReportBatchAction, BatchActionRunStatus, MessageActionResult
 from biz.dal.user import Account, User
-from biz.model import ReportFieldName
-from biz.model.report.report_batch_action_message import ReportBatchActionMessage
+from biz.utils.report import ReportFieldName
+from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
 from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
 from biz.service.aws.sqs import send_report_batch_action_message
 from biz.utils.logger import logger
 from biz.utils.response import ResponseCode
-from biz.model.report import report as report_model
+from haper_script.schema_gen.python import report as report_model
 
 
 def start_new_reporting_sequence(session: Session, user_id: str):

@@ -11,10 +11,10 @@ from biz.controller.outlook_util import extract_outlook_info
 from biz.dal.email import Email, EmailSource
 from biz.dal.report import MessageCategory, MessageAction, Report
 from biz.dal.user_setting import UserSetting
-from biz.model import ReportFieldName
-from biz.model.report.rich_text import rich_text_from_dict
+from biz.utils.report import ReportFieldName
+from haper_script.schema_gen.python.rich_text import rich_text_from_dict
 from biz.service.db import get_session
-from biz.model.report import report as report_model
+from haper_script.schema_gen.python import report as report_model
 from biz.utils import schema_loader
 from biz.utils.logger import logger
 from biz.utils.response import ResponseCode

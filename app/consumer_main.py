@@ -10,11 +10,11 @@ from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.report import Report, MessageAction
 from biz.dal.report_batch_action import MessageActionResult, ReportBatchAction, BatchActionRunStatus
 from biz.dal.user import Account
-from biz.model.report import sqs_message as sqs_message_model
-from biz.model.report import report as report_model
-from biz.model.report import action_log as action_log_model
-from biz.model.report.report_batch_action_message import ReportBatchActionMessage
-from biz.model.report.report_update_message import ReportUpdateMessage
+from haper_script.schema_gen.python import sqs_message as sqs_message_model
+from haper_script.schema_gen.python import report as report_model
+from haper_script.schema_gen.python import action_log as action_log_model
+from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
+from haper_script.schema_gen.python.report_update_message import ReportUpdateMessage
 from biz.service.db import get_session, init_db
 from biz.service.aws.sqs import get_sqs_client, init_sqs
 from biz.utils import track_haper_error, split_email_str
