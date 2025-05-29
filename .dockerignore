@@ -170,8 +170,11 @@ tests
 .github
 .git
 README.md
-Dockerfile
 .dockerignore
 script
 docker
 tmp
+
+## submodules
+haper_script/*
+!haper_script/schema_gen
