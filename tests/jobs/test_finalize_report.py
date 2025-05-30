@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 from app.jobs.finalize_report import init_job, job_main
-from biz.dal.report import Report, ReportStatus
+from biz.dal.report import Report, ReportStatus, ReportType
 from biz.dal.user import User
 from biz.dal.user_setting import UserSetting, DEFAULT_REPORT_MAX_TIME_DURATION
 from biz.service.db import get_session
@@ -16,9 +16,10 @@ def test_finalize_report():
         report = Report.add(
             session,
             user.id,
+            ReportType.Realtime,
             {}
         )
-        report.created_at = datetime.now(timezone.utc) - timedelta(seconds=DEFAULT_REPORT_MAX_TIME_DURATION+10)
+        report.created_at = datetime.now(timezone.utc) - timedelta(seconds=DEFAULT_REPORT_MAX_TIME_DURATION + 10)
         report_id = report.id
 
     # Run the job

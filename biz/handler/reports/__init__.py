@@ -1,9 +1,9 @@
 import json
 import time
-from typing import Optional, List
+from typing import Optional, List, Annotated
 
 from flask import Blueprint, request, Response
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, PositiveInt, AfterValidator
 
 from biz.controller import report as report_ctrl
 from biz.dal.report_batch_action import BatchActionRunStatus
@@ -19,6 +19,7 @@ report_routes = Blueprint("report_api", __name__, url_prefix="/report")
 def report_to_resp_dict(report):
     return {
         "id": str(report.id),
+        "type": report.type,
         "content": report.content,
         "status": report.status,
         "created_at": report.created_at,
@@ -44,6 +45,7 @@ def get_newest_appending_report():
     return resp.return_with_log()
 
 
+# TODO: move the request rule to /realtime/generate
 @report_routes.route("/generate", methods=["POST"])
 @catch_error
 @user_auth()
@@ -280,5 +282,34 @@ def get_message_content(report_id: str):
         }
     })
     return resp.return_with_log()
+
+
+def _valid_email_list_to_process(v: List[report_ctrl.EmailToProcessByAccount]):
+    if len(v) == 0:
+        raise ValueError("email_list_to_process must not be empty")
+    return v
+
+
+class GeneratePreviousReportReq(BaseModel):
+    email_list_to_process: Annotated[
+        List[report_ctrl.EmailToProcessByAccount], AfterValidator(_valid_email_list_to_process)]
+
+
+@report_routes.route("/previous/generate", methods=["POST"])
+@catch_error
+@user_auth()
+@user_limiter.limit("5 per day")
+def generate_previous_report():
+    resp = HTTPResponse(request.method, request.path)
+    req = GeneratePreviousReportReq(**request.get_json())
+
+    report = report_ctrl.generate_previous_report(request.ctx.user_id, req.email_list_to_process)
+
+    resp.set_data({
+        "report": report_to_resp_dict(report),
+        "message": "Previous report generation initiated successfully"
+    })
+    return resp.return_with_log()
+
 
 __all__ = ['report_routes']

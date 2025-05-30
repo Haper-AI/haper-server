@@ -8,7 +8,7 @@ from sqlalchemy.orm import make_transient
 
 from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
-from biz.controller.report import start_new_reporting_sequence, end_reporting_sequence
+from biz.controller.report import start_realtime_reporting_sequence, end_realtime_reporting_sequence
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus, MessageTrackingStatusExtraInfoKeys
 from biz.dal.user import Account
@@ -65,7 +65,7 @@ def start_message_tracking_with_existing_account(user_id: str, account_id: Union
 
         # if the ongoing message tracking count goes from 0 to 1, start report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
-            start_new_reporting_sequence(session, user_id)
+            start_realtime_reporting_sequence(session, user_id)
 
         # start sync message with provider
         extra_info = {}
@@ -149,7 +149,7 @@ def start_message_tracking_with_new_account(user_id: str, provider: str, provide
 
         # if the ongoing message tracking count goes from 0 to 1, start report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 1:
-            start_new_reporting_sequence(session, user_id)
+            start_realtime_reporting_sequence(session, user_id)
 
         make_transient(tracking_record), make_transient(account)
 
@@ -182,7 +182,7 @@ def stop_message_tracking(user_id: str, account_id: Union[uuid.UUID, str]):
 
         # if the ongoing message tracking count goes from 1 to 0, end report sequence
         if MessageTrackingRecord.count_ongoing_by_user_id(session, user_id) == 0:
-            end_reporting_sequence(session, user_id)
+            end_realtime_reporting_sequence(session, user_id)
 
         # stop message sync with provider
         if account.provider == AccountProvider.Google:

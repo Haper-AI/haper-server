@@ -18,7 +18,7 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.controller.report_update import example_summary
 from biz.dal.email import Email
-from biz.dal.report import Report, MessageCategory, MessageAction
+from biz.dal.report import Report, MessageCategory, MessageAction, ReportType
 from biz.dal.user import User, Account, AccountProvider
 from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.service.db import get_session
@@ -252,7 +252,7 @@ def test_handle_report_update_gmail_message():
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
         emails = [
             Email(
                 user_id=user.id,
@@ -431,7 +431,7 @@ def test_handle_report_update_outlook_message():
             expires_at=int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
             email=email
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
         emails = [
             Email(
                 user_id=user.id,

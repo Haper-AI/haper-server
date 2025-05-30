@@ -4,7 +4,7 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.email import EmailSource
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus, MessageTrackingStatusExtraInfoKeys
-from biz.dal.report import Report
+from biz.dal.report import Report, ReportType
 from biz.dal.user import Account
 from biz.utils.report import ReportFieldName
 from biz.service.db import get_session
@@ -66,7 +66,7 @@ def sync_user_gmail_message(email: str, history_id: int):
 
         # update report and send sqs message if new messages are found
         if new_gmail_message:
-            latest_report = Report.get_latest_by_user_id(session, account.user_id, for_update=True)
+            latest_report = Report.get_latest_by_user_id(session, account.user_id, ReportType.Realtime, for_update=True)
             if latest_report is None:  # if there is no ongoing report sequence
                 logger.warning("no ongoing report sequence for user %s", str(account.user_id))
                 return
@@ -117,7 +117,7 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
                 continue
 
             # update report messages_in_queue field
-            latest_report = Report.get_latest_by_user_id(session, account.user_id, for_update=True)
+            latest_report = Report.get_latest_by_user_id(session, account.user_id, ReportType.Realtime, for_update=True)
             if latest_report is None:
                 logger.warning("no ongoing report sequence for user {}".format(account.user_id))
                 continue

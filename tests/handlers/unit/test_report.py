@@ -12,7 +12,7 @@ from sqlalchemy.orm import make_transient
 from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.user import AccountProvider
 from biz.dal.email import Email, EmailSource
-from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
+from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction, ReportType
 from biz.dal.report_batch_action import ReportBatchAction, MessageActionResult, BatchActionRunStatus
 from biz.dal.user import User
 from biz.dal.user_subscription import UserSubscription
@@ -26,6 +26,7 @@ from haper_script.schema_gen.python import action_log as action_log_model
 
 from tests import generate_random_gmail, generate_random_string
 from tests.handlers.unit.conftest import db_add_new_account
+from .conftest import new_user_gmail_account
 
 embeddings = [random.uniform(-1, 1) for _ in range(768)]
 
@@ -36,7 +37,7 @@ def new_user_empty_report():
     with get_session(write=True) as session:
         user = User.add(session, "user name", email, email_verified=True)
         account = db_add_new_account(session, user.id, email, provider=AccountProvider.Google)
-        report = Report.add(session, user.id, {})
+        report = Report.add(session, user.id, ReportType.Realtime, {})
         make_transient(user), make_transient(account), make_transient(report)
     return user, account, report
 
@@ -171,7 +172,7 @@ def new_user_report():
                 outlook=None
             )
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
 
         make_transient(user), make_transient(account), make_transient(report)
 
@@ -233,7 +234,7 @@ def new_user_report_with_done_action():
                 outlook=None,
             )
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
         Report.update(session, report.id, status=ReportStatus.Finalized)
 
         make_transient(user), make_transient(account), make_transient(report)
@@ -296,7 +297,7 @@ def new_user_report_with_reply_action_and_no_reply_message():
                 outlook=None
             )
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
         Report.update(session, report.id, status=ReportStatus.Finalized)
 
         make_transient(user), make_transient(account), make_transient(report)
@@ -321,7 +322,7 @@ def new_user_report_with_messages_in_queue():
                 outlook=None,
             )
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
         Report.update(session, report.id, status=ReportStatus.Finalized)
 
         make_transient(user), make_transient(account), make_transient(report)
@@ -370,7 +371,7 @@ class TestGenerateReport:
                 assert response.status_code == 200
 
                 with get_session(write=True) as session:
-                    new_report = Report.get_latest_by_user_id(session, user.id)
+                    new_report = Report.get_latest_by_user_id(session, user.id, ReportType.Realtime)
                     Report.delete(session, new_report.id)
                     Report.update(session, report.id, status=ReportStatus.Appending)
 
@@ -953,3 +954,189 @@ class TestGetMessageContent:
         })
         assert response.status_code == 200
         assert response.data
+
+
+class TestGeneratePreviousReport:
+    def test_success(self, client, new_user_gmail_account):
+        user, account = new_user_gmail_account
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+        response = client.post("/api/v1/report/previous/generate", json={
+            "email_list_to_process": [
+                {
+                    "account_id": str(account.id),
+                    "number_of_email": 10
+                }
+            ]
+        })
+
+        assert response.status_code == 200
+        assert response.get_json()['data']['report']
+        assert response.get_json()['data']['message'] == "Previous report generation initiated successfully"
+
+        # Verify the report was created
+        report_data = response.get_json()['data']['report']
+        assert report_data['id']
+        assert report_data['status'] == ReportStatus.Appending
+
+    def test_success_multiple_accounts(self, client, new_user_gmail_account):
+        user, account = new_user_gmail_account
+
+        # Create a second account
+        with get_session(write=True) as session:
+            account2 = db_add_new_account(session, user.id, generate_random_gmail(8), provider=AccountProvider.Google)
+            make_transient(account2)
+
+        client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+        response = client.post("/api/v1/report/previous/generate", json={
+            "email_list_to_process": [
+                {
+                    "account_id": str(account.id),
+                    "number_of_email": 5
+                },
+                {
+                    "account_id": str(account2.id),
+                    "number_of_email": 15
+                }
+            ]
+        })
+
+        assert response.status_code == 200
+        assert response.get_json()['data']['report']
+
+    class TestFail:
+        def test_fail_with_invalid_auth(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
+
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "account_id": str(account.id),
+                        "number_of_email": 10
+                    }
+                ]
+            })
+
+            assert response.status_code == 400
+
+        def test_fail_with_invalid_account_id(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "account_id": str(uuid.uuid4()),
+                        "number_of_email": 10
+                    }
+                ]
+            })
+
+            assert response.status_code == 400
+
+        def test_fail_with_too_many_emails(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "account_id": str(account.id),
+                        "number_of_email": 150
+                    }
+                ]
+            })
+
+            assert response.status_code == 400
+
+        def test_fail_with_empty_email_list(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": []
+            })
+
+            assert response.status_code == 400
+
+        def test_fail_with_missing_fields(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+            # Missing number_of_email
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "account_id": str(account.id)
+                    }
+                ]
+            })
+
+            assert response.status_code == 400
+
+            # Missing account_id
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "number_of_email": 10
+                    }
+                ]
+            })
+
+            assert response.status_code == 400
+
+        def test_fail_with_existing_previous_report_task(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+
+            # Create an existing previous report
+            with get_session(write=True) as session:
+                Report.add(session, user.id, ReportType.Previous, {})
+
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "account_id": str(account.id),
+                        "number_of_email": 10
+                    }
+                ]
+            })
+
+            assert response.status_code == 400
+            assert "already exists an task" in response.get_json()['message']
+
+        def test_fail_with_rate_limit(self, client, new_user_gmail_account):
+            user, account = new_user_gmail_account
+            client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
+
+            # Make 5 successful requests (the daily limit)
+            for i in range(5):
+                response = client.post("/api/v1/report/previous/generate", json={
+                    "email_list_to_process": [
+                        {
+                            "account_id": str(account.id),
+                            "number_of_email": 10
+                        }
+                    ]
+                })
+
+                if response.status_code == 200:
+                    # Clean up the created report to allow next request
+                    with get_session(write=True) as session:
+                        latest_report = Report.get_latest_by_user_id(session, user.id, ReportType.Previous)
+                        if latest_report:
+                            Report.delete(session, latest_report.id)
+
+            # The 6th request should be rate limited
+            response = client.post("/api/v1/report/previous/generate", json={
+                "email_list_to_process": [
+                    {
+                        "account_id": str(account.id),
+                        "number_of_email": 10
+                    }
+                ]
+            })
+
+            assert response.status_code == 400

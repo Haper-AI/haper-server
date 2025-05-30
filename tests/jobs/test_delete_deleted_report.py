@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.jobs.delete_marked_deleted_report import init_job, job_main
 from biz.dal.email import EmailSource, Email
-from biz.dal.report import Report, MessageAction, MessageCategory
+from biz.dal.report import Report, MessageAction, MessageCategory, ReportType
 from biz.dal.user import User
 from haper_script.schema_gen.python import report as report_model
 from biz.service.db import get_session
@@ -49,6 +49,7 @@ def test_delete_marked_deleted_report():
         report = Report.add(
             session,
             user.id,
+            ReportType.Realtime,
             report_obj.to_dict()
         )
         email = Email(

@@ -10,7 +10,7 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus
-from biz.dal.report import Report
+from biz.dal.report import Report, ReportType
 from biz.dal.user import Account, User
 from biz.dal.user_subscription import UserSubscription
 from biz.handler.middleware import gen_jwt_auth
@@ -30,7 +30,7 @@ def new_user_gmail_tracking_record():
         record = MessageTrackingRecord.add(session, str(user.id), str(account.id), account.provider, extra_info={
             "some_info_key": "some_info_value"
         })
-        Report.add(session, user.id, {})
+        Report.add(session, user.id, ReportType.Realtime, {})
 
         make_transient(user), make_transient(account), make_transient(record)
     return user, account, record
@@ -45,7 +45,7 @@ def new_user_outlook_tracking_record():
         record = MessageTrackingRecord.add(session, str(user.id), str(account.id), account.provider, extra_info={
             "subscription_id": str(uuid.uuid4()),
         })
-        Report.add(session, user.id, {})
+        Report.add(session, user.id, ReportType.Realtime, {})
 
         make_transient(user), make_transient(account), make_transient(record)
     return user, account, record

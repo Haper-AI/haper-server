@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.padding import PKCS7
 from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord
-from biz.dal.report import Report
+from biz.dal.report import Report, ReportType
 from biz.dal.user import User
 from biz.dal.user_subscription import UserSubscription, UserSubscriptionStatus
 from biz.handler.middleware import gen_jwt_auth
@@ -71,7 +71,7 @@ class TestGmailSyncWebhook:
                 "pre_history_id": "some_history_id",
                 "expiration": int((datetime.now() + timedelta(hours=12)).timestamp()),
             })
-            Report.add(session, user.id, {})
+            Report.add(session, user.id, ReportType.Realtime, {})
 
         response = client.post('/api/v1/webhook/gmail-sync', json={
             'message': {
@@ -137,7 +137,7 @@ class TestOutlookSyncWebhook:
                     "subscription_id": "some_subscription_id",
                     "expiration": int((datetime.now() + timedelta(hours=12)).timestamp()),
                 })
-                Report.add(session, user.id, {})
+                Report.add(session, user.id, ReportType.Realtime, {})
 
             private_key_str, public_key_str = create_rsa_pairs()
 
@@ -283,7 +283,6 @@ class TestStripeEventWebhook:
 
             # Assert the response
             assert response.status_code == 200
-
 
         def test_customer_subscription_resumed(self, client, new_user):
             customer_id = "cus_test_123"

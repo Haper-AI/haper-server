@@ -28,6 +28,11 @@ class ReportStatus(str, PyEnum):
     Finalized = "Finalized"
 
 
+class ReportType(str, PyEnum):
+    Realtime = "Realtime"
+    Previous = "Previous"
+
+
 class Report(Base):
     __tablename__ = 'reports'
     __table_args__ = {'comment': 'Message report'}
@@ -43,6 +48,11 @@ class Report(Base):
         ForeignKey('users.id', ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
         comment='References the user (from users table) who generated the report'
+    )
+    type = Column(
+        String(16),
+        nullable=False,
+        comment='Type of the report, e.g., Realtime or Previous'
     )
     status = Column(
         String(16),
@@ -79,9 +89,10 @@ class Report(Base):
     )
 
     @classmethod
-    def add(cls, session: Session, user_id: Union[str, UUID], content: dict):
+    def add(cls, session: Session, user_id: Union[str, UUID], report_type: ReportType, content: dict):
         blank_report = cls(
             user_id=user_id,
+            type=report_type,
             status=ReportStatus.Appending,
             content=content
         )
@@ -130,9 +141,10 @@ class Report(Base):
         return q.first()
 
     @classmethod
-    def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID], for_update=False):
+    def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID], report_type: ReportType,
+                              for_update=False):
         q = (session.query(cls)
-             .filter_by(user_id=user_id, status=ReportStatus.Appending)
+             .filter_by(user_id=user_id, type=report_type, status=ReportStatus.Appending)
              .order_by(cls.created_at.desc())
              )
         if for_update:

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Dict
 
-from biz.dal.report import Report, ReportStatus
+from biz.dal.report import Report, ReportStatus, ReportType
 from biz.dal.user_setting import UserSetting
 from biz.service.db import init_db, get_session
 from biz.utils.logger import logger
@@ -43,7 +43,7 @@ def job_main():
                 # finalize the report, TODO: handle empty report content
                 with get_session(write=True) as session:
                     Report.update(session, report.id, status=ReportStatus.Finalized)
-                    Report.add(session, report.user_id, {})
+                    Report.add(session, report.user_id, ReportType.Realtime, {})
                     logger.info("report {} exceed max duration {} seconds, finalized at {}".format(
                         report.id,
                         user_setting.report_max_duration,

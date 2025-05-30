@@ -4,7 +4,7 @@ from sqlalchemy.orm import make_transient
 
 from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
-from biz.controller.report import end_reporting_sequence
+from biz.controller.report import end_realtime_reporting_sequence
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingStatus, MessageTrackingRecord, MessageTrackingStatusExtraInfoKeys
 from biz.dal.user import Account, User
@@ -79,7 +79,7 @@ def delete_user(user_id: str):
                 logger.error("error happened when stop messaging: {}".format(str(e)))
 
         # end report sequence
-        end_reporting_sequence(session, user_id)
+        end_realtime_reporting_sequence(session, user_id)
 
         # TODO: revoke tokens for oauth providers: https://developers.google.com/identity/protocols/oauth2/web-server?authuser=2&hl=en#tokenrevoke
 
