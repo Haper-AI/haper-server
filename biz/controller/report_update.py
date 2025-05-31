@@ -174,6 +174,22 @@ update_summary_template = ChatPromptTemplate.from_template(
 
 def update_report_with_gmail_message(user_id: str, account_id: str, account_email: str, report_id: str,
                                      gmail_list: List[RawGmailInfo], message_num_to_decrease: int) -> None:
+    """
+    Updates the report with new Gmail messages for a user.
+
+    Args:
+        user_id (str): The user's unique identifier.
+        account_id (str): The Gmail account's unique identifier.
+        account_email (str): The Gmail account's email address.
+        report_id (str): The report's unique identifier.
+        gmail_list (List[RawGmailInfo]): List of raw Gmail message info to process.
+        message_num_to_decrease (int): Number of messages to decrease from the queue.
+            As gmail list may be less than the message_num_to_decrease due to email not found, this is used to
+            make sure decrease the messages in queue correctly.
+
+    Returns:
+        None
+    """
     if gmail_list:
         with get_session(write=False) as session:
             # get user focused tags
@@ -233,7 +249,7 @@ def update_report_with_gmail_message(user_id: str, account_id: str, account_emai
                 history_examples = "\n    ".join([f'  - {e}' for e in history_examples_json_list])
 
             # generate suggested category and action for email
-            for i in range(3): # retry 3 times in case of generation error
+            for i in range(3):  # retry 3 times in case of generation error
                 formated_prompt = classify_email_prompt_template.format(
                     fixed_categories=fixed_categories_str,
                     user_key_tags=user_key_tags_str,
@@ -438,7 +454,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                 history_examples = "\n    ".join([f'  - {e}' for e in history_examples_json_list])
 
             # generate suggested category and action for email
-            for i in range(3): # retry 3 times in case of generation error
+            for i in range(3):  # retry 3 times in case of generation error
                 formated_prompt = classify_email_prompt_template.format(
                     fixed_categories=fixed_categories_str,
                     user_key_tags=user_key_tags_str,
@@ -564,8 +580,9 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
             )
             messages_in_queue[EmailSource.Outlook] -= message_num_to_decrease
             report_obj.messages_in_queue = messages_in_queue
-            logger.info("decreasing {} outlook messages, remaining messages in queue: {}".format(message_num_to_decrease,
-                                                                                               messages_in_queue))
+            logger.info(
+                "decreasing {} outlook messages, remaining messages in queue: {}".format(message_num_to_decrease,
+                                                                                         messages_in_queue))
             Report.update(session, report_id, content=report_obj.to_dict())
 
     elif message_num_to_decrease > 0:
@@ -577,6 +594,7 @@ def update_report_with_outlook_emails(user_id: str, account_id: str, account_ema
                 for_update=True
             )
             messages_in_queue[EmailSource.Outlook] -= message_num_to_decrease
-            logger.info("decreasing {} outlook messages, remaining messages in queue: {}".format(message_num_to_decrease,
-                                                                                               messages_in_queue))
+            logger.info(
+                "decreasing {} outlook messages, remaining messages in queue: {}".format(message_num_to_decrease,
+                                                                                         messages_in_queue))
             Report.update_content_subfield(session, report_id, ReportFieldName.MessagesInQueue, messages_in_queue)

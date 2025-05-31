@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 
 import requests
+from kiota_abstractions.base_request_configuration import RequestConfiguration
 from msgraph.generated.models.body_type import BodyType
 from msgraph.generated.models.email_address import EmailAddress
 from msgraph.generated.models.item_body import ItemBody
@@ -9,6 +10,7 @@ from msgraph.generated.models.message import Message
 from msgraph.generated.models.recipient import Recipient
 from msgraph.generated.models.subscription import Subscription
 from msgraph.generated.users.item.messages.item.reply.reply_post_request_body import ReplyPostRequestBody
+from msgraph.generated.users.item.messages.messages_request_builder import MessagesRequestBuilder
 
 from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
 from biz.service.aws.sm import get_outlook_sub_public_b64
@@ -47,7 +49,7 @@ def extract_outlook_info(email_info: Message, clean_html=True) -> OutlookInfo:
         extracted_outlook_info.mime_type = EmailBodyType.Text
 
     extracted_outlook_info.body = body_info_dict.content
-    if not extracted_outlook_info.cleaned_body: # assign cleaned body to body if not already set
+    if not extracted_outlook_info.cleaned_body:  # assign cleaned body to body if not already set
         extracted_outlook_info.cleaned_body = extracted_outlook_info.body
 
     return extracted_outlook_info
@@ -130,6 +132,18 @@ class OutlookAPIClient:
 
     def stop_watch_outlook(self, subscription_id: str):
         asyncio.run(self.client.subscriptions.by_subscription_id(subscription_id).delete())
+
+    def list_emails(self, max_results: int = 100):
+        query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters(
+            # select=["sender", "subject"],
+            top=max_results,
+        )
+
+        request_configuration = RequestConfiguration(
+            query_parameters=query_params,
+        )
+
+        return asyncio.run(self.client.me.messages.get(request_configuration=request_configuration))
 
     def get_email(self, message_id: str):
         return asyncio.run(self.client.me.messages.by_message_id(message_id).get())

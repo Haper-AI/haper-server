@@ -11,25 +11,10 @@ from biz.service.db import get_session
 from biz.service.aws.sqs import send_report_update_message
 from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.utils.logger import logger
-from haper_script.schema_gen.python import report as report_model
+from biz.controller.report_util import initialize_report
 
 
 # TODO: to avoid duplicate message process, use redis to cache processed message ids
-
-def initialize_report(messages_in_queue=None):
-    if messages_in_queue is None:
-        messages_in_queue = {}
-    return report_model.Report(
-        messages_in_queue=messages_in_queue,
-        summary=[],
-        content=report_model.ReportContent(
-            content_sources=[],
-            gmail=None,
-            outlook=None
-        ),
-    )
-
-
 def sync_user_gmail_message(email: str, history_id: int):
     with get_session(write=False) as session:
         account = Account.get_by_mail_and_provider(session, email, AccountProvider.Google)

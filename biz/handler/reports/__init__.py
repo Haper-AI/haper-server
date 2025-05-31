@@ -44,7 +44,7 @@ def get_newest_appending_report():
         })
     return resp.return_with_log()
 
-@report_routes.route("/previous/latest")
+@report_routes.route("/previous/newest")
 @catch_error
 @user_auth()
 def get_latest_previous_report():

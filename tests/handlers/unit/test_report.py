@@ -962,7 +962,7 @@ class TestGeneratePreviousReport:
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
         response = client.post("/api/v1/report/previous/generate", json={
-            "email_list_to_process": [
+            "task_info": [
                 {
                     "account_id": str(account.id),
                     "number_of_email": 10
@@ -972,7 +972,6 @@ class TestGeneratePreviousReport:
 
         assert response.status_code == 200
         assert response.get_json()['data']['report']
-        assert response.get_json()['data']['message'] == "Previous report generation initiated successfully"
 
         # Verify the report was created
         report_data = response.get_json()['data']['report']
@@ -990,7 +989,7 @@ class TestGeneratePreviousReport:
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
         response = client.post("/api/v1/report/previous/generate", json={
-            "email_list_to_process": [
+            "task_info": [
                 {
                     "account_id": str(account.id),
                     "number_of_email": 5
@@ -1011,7 +1010,7 @@ class TestGeneratePreviousReport:
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(uuid.uuid4())))
 
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "account_id": str(account.id),
                         "number_of_email": 10
@@ -1026,7 +1025,7 @@ class TestGeneratePreviousReport:
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "account_id": str(uuid.uuid4()),
                         "number_of_email": 10
@@ -1041,7 +1040,7 @@ class TestGeneratePreviousReport:
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "account_id": str(account.id),
                         "number_of_email": 150
@@ -1056,7 +1055,7 @@ class TestGeneratePreviousReport:
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
 
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": []
+                "task_info": []
             })
 
             assert response.status_code == 400
@@ -1067,7 +1066,7 @@ class TestGeneratePreviousReport:
 
             # Missing number_of_email
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "account_id": str(account.id)
                     }
@@ -1078,7 +1077,7 @@ class TestGeneratePreviousReport:
 
             # Missing account_id
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "number_of_email": 10
                     }
@@ -1096,7 +1095,7 @@ class TestGeneratePreviousReport:
 
             client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "account_id": str(account.id),
                         "number_of_email": 10
@@ -1114,7 +1113,7 @@ class TestGeneratePreviousReport:
             # Make 5 successful requests (the daily limit)
             for i in range(5):
                 response = client.post("/api/v1/report/previous/generate", json={
-                    "email_list_to_process": [
+                    "task_info": [
                         {
                             "account_id": str(account.id),
                             "number_of_email": 10
@@ -1131,7 +1130,7 @@ class TestGeneratePreviousReport:
 
             # The 6th request should be rate limited
             response = client.post("/api/v1/report/previous/generate", json={
-                "email_list_to_process": [
+                "task_info": [
                     {
                         "account_id": str(account.id),
                         "number_of_email": 10

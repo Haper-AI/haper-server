@@ -7,14 +7,18 @@ from kiota_abstractions.api_error import APIError
 from biz.controller import report_update as report_update_ctrl
 from biz.controller.gmail_util import RawGmailInfo, GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
-from biz.dal.report import Report, MessageAction
+from biz.controller.report_util import initialize_report
+from biz.dal.email import EmailSource
+from biz.dal.report import Report, MessageAction, ReportStatus
 from biz.dal.report_batch_action import MessageActionResult, ReportBatchAction, BatchActionRunStatus
-from biz.dal.user import Account
+from biz.dal.user import Account, AccountProvider
+from biz.utils.report import ReportFieldName
 from haper_script.schema_gen.python import sqs_message as sqs_message_model
 from haper_script.schema_gen.python import report as report_model
 from haper_script.schema_gen.python import action_log as action_log_model
 from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
 from haper_script.schema_gen.python.report_update_message import ReportUpdateMessage
+from haper_script.schema_gen.python.previous_report_generate_message import PreviousReportGenerateMessage
 from biz.service.db import get_session, init_db
 from biz.service.aws.sqs import get_sqs_client, init_sqs
 from biz.utils import track_haper_error, split_email_str
@@ -216,78 +220,54 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
         ReportBatchAction.update(session, the_message.run_id, status=BatchActionRunStatus.Done)
 
 
-def generate_previous_report(the_message: ReportUpdateMessage):
+def generate_previous_report(the_message: PreviousReportGenerateMessage):
     """
     Process old email messages from SQS and generate reports.
     Similar to handle_report_update but for historical emails.
     """
-    if the_message.messages.gmail:  # handle gmail messages
-        account_id = the_message.messages.gmail.account_id
-        old_gmail_messages = the_message.messages.gmail.new_messages  # reusing the same structure
+    with get_session(write=True) as session:
+        Report.update(session, the_message.report_id, content=initialize_report(messages_in_queue={}).to_dict())
 
+    for task_by_account in the_message.task_info:  # handle gmail messages
         # get user account info from db
-        with get_session(False) as session:
-            account = Account.get_by_id(session, account_id)
+        with get_session(write=False) as session:
+            account = Account.get_by_id(session, task_by_account.account_id)
 
-        # use user account info to call gmail api
-        gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
+        # TODO: we add calculate all the message in queue first
+        if account.provider == AccountProvider.Google:
+            gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            raw_emails = gmail_api_client.list_emails(max_results=task_by_account.number_of_email)
 
-        # fetch historical emails
-        emails = []
-        for old_gmail_msg in old_gmail_messages:
-            try:
-                email_info = gmail_api_client.get_email(old_gmail_msg.message_id)
-                emails.append(RawGmailInfo(old_gmail_msg.message_id, old_gmail_msg.thread_id, email_info))
-            except HttpError as e:
-                if e.resp.status == 404:
-                    logger.warning(f"Historical Gmail not found: {old_gmail_msg.message_id} for email {account.email}")
-                    continue
+            with get_session(write=True) as session:
+                Report.update_content_subfield(session, the_message.report_id, ReportFieldName.MessagesInQueue,
+                                               {EmailSource.Gmail: len(raw_emails)})
+            # generate report for historical emails
+            report_update_ctrl.update_report_with_gmail_message(
+                the_message.user_id,
+                str(task_by_account.account_id),
+                account.email,
+                the_message.report_id,
+                raw_emails,
+                len(raw_emails),
+            )
+        else:
+            outlook_api_client = OutlookAPIClient(account.access_token, account.refresh_token, account.expires_at)
+            raw_emails = outlook_api_client.list_emails(max_results=task_by_account.number_of_email)
+            with get_session(write=True) as session:
+                Report.update_content_subfield(session, the_message.report_id, ReportFieldName.MessagesInQueue,
+                                               {EmailSource.Outlook: len(raw_emails)})
+            # generate report for historical emails
+            report_update_ctrl.update_report_with_outlook_emails(
+                the_message.user_id,
+                str(task_by_account.account_id),
+                account.email,
+                the_message.report_id,
+                raw_emails,
+                len(raw_emails),
+            )
 
-        # generate report for historical emails
-        report_update_ctrl.generate_report_with_gmail_message(
-            the_message.user_id,
-            str(account_id),
-            account.email,
-            the_message.report_id,
-            emails,
-            len(old_gmail_messages)
-        )
-
-    elif the_message.messages.outlook:
-        account_id = the_message.messages.outlook.account_id
-        old_mail_ids = the_message.messages.outlook.new_messages
-
-        # get user account info from db
-        with get_session(False) as session:
-            account = Account.get_by_id(session, account_id)
-
-        # use user account info to call outlook api
-        outlook_api_client = OutlookAPIClient(
-            account.access_token,
-            account.refresh_token,
-            account.expires_at
-        )
-
-        # fetch historical emails
-        emails = []
-        for mail_id in old_mail_ids:
-            try:
-                result = outlook_api_client.get_email(mail_id)
-                emails.append(result)
-            except APIError as e:
-                if e.response_status_code == 404:
-                    logger.warning(f"Historical Outlook mail not found: {mail_id} for email {account.email}")
-                    continue
-
-        # generate report for historical emails
-        report_update_ctrl.generate_report_with_outlook_emails(
-            the_message.user_id,
-            str(account_id),
-            account.email,
-            the_message.report_id,
-            emails,
-            len(old_mail_ids)
-        )
+    with get_session(write=True) as session:
+        Report.update(session, the_message.report_id, status=ReportStatus.Finalized)
 
 
 def init():
@@ -329,10 +309,12 @@ if __name__ == '__main__':
                     sqs_message_obj = sqs_message_model.sqs_message_from_dict(json.loads(message['Body']))
                     if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE:
                         handle_report_update(sqs_message_obj.report_update_message)
-                    elif sqs_message_obj.action_type == sqs_message_model.ActionType.PREVIOUS_REPORT:
-                        generate_previous_report(sqs_message_obj.report_update_message)
-                    else:
+                    elif sqs_message_obj.action_type == sqs_message_model.ActionType.PREVIOUS_REPORT_GENERATE:
+                        generate_previous_report(sqs_message_obj.previous_report_generate_message)
+                    elif sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_BATCH_ACTION:
                         handle_report_batch_action(sqs_message_obj.report_batch_action_message)
+                    else:
+                        logger.error(f"Unknown action type: {sqs_message_obj.action_type}")
                 except Exception as e:
                     file_name, line_number, func_name, text = track_haper_error(e)
                     logger.error(f"Error in {file_name}, line {line_number}, in {func_name}: {text}")
