@@ -216,6 +216,80 @@ def handle_report_batch_action(the_message: ReportBatchActionMessage):
         ReportBatchAction.update(session, the_message.run_id, status=BatchActionRunStatus.Done)
 
 
+def generate_previous_report(the_message: ReportUpdateMessage):
+    """
+    Process old email messages from SQS and generate reports.
+    Similar to handle_report_update but for historical emails.
+    """
+    if the_message.messages.gmail:  # handle gmail messages
+        account_id = the_message.messages.gmail.account_id
+        old_gmail_messages = the_message.messages.gmail.new_messages  # reusing the same structure
+
+        # get user account info from db
+        with get_session(False) as session:
+            account = Account.get_by_id(session, account_id)
+
+        # use user account info to call gmail api
+        gmail_api_client = GmailAPIClient(account.access_token, account.refresh_token, account.expires_at)
+
+        # fetch historical emails
+        emails = []
+        for old_gmail_msg in old_gmail_messages:
+            try:
+                email_info = gmail_api_client.get_email(old_gmail_msg.message_id)
+                emails.append(RawGmailInfo(old_gmail_msg.message_id, old_gmail_msg.thread_id, email_info))
+            except HttpError as e:
+                if e.resp.status == 404:
+                    logger.warning(f"Historical Gmail not found: {old_gmail_msg.message_id} for email {account.email}")
+                    continue
+
+        # generate report for historical emails
+        report_update_ctrl.generate_report_with_gmail_message(
+            the_message.user_id,
+            str(account_id),
+            account.email,
+            the_message.report_id,
+            emails,
+            len(old_gmail_messages)
+        )
+
+    elif the_message.messages.outlook:
+        account_id = the_message.messages.outlook.account_id
+        old_mail_ids = the_message.messages.outlook.new_messages
+
+        # get user account info from db
+        with get_session(False) as session:
+            account = Account.get_by_id(session, account_id)
+
+        # use user account info to call outlook api
+        outlook_api_client = OutlookAPIClient(
+            account.access_token,
+            account.refresh_token,
+            account.expires_at
+        )
+
+        # fetch historical emails
+        emails = []
+        for mail_id in old_mail_ids:
+            try:
+                result = outlook_api_client.get_email(mail_id)
+                emails.append(result)
+            except APIError as e:
+                if e.response_status_code == 404:
+                    logger.warning(f"Historical Outlook mail not found: {mail_id} for email {account.email}")
+                    continue
+
+        # generate report for historical emails
+        report_update_ctrl.generate_report_with_outlook_emails(
+            the_message.user_id,
+            str(account_id),
+            account.email,
+            the_message.report_id,
+            emails,
+            len(old_mail_ids)
+        )
+
+
 def init():
     init_db()
     init_sqs()
@@ -255,6 +329,8 @@ if __name__ == '__main__':
                     sqs_message_obj = sqs_message_model.sqs_message_from_dict(json.loads(message['Body']))
                     if sqs_message_obj.action_type == sqs_message_model.ActionType.REPORT_UPDATE:
                         handle_report_update(sqs_message_obj.report_update_message)
+                    elif sqs_message_obj.action_type == sqs_message_model.ActionType.PREVIOUS_REPORT:
+                        generate_previous_report(sqs_message_obj.report_update_message)
                     else:
                         handle_report_batch_action(sqs_message_obj.report_batch_action_message)
                 except Exception as e:
