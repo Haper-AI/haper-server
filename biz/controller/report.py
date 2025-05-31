@@ -23,7 +23,7 @@ from biz.utils.logger import logger
 from biz.utils.response import ResponseCode
 from haper_script.schema_gen.python import report as report_model
 from haper_script.schema_gen.python.previous_report_generate_message import PreviousReportGenerateMessage, \
-    PreviousEmailByAccount
+    TaskByAccount
 
 
 def start_realtime_reporting_sequence(session: Session, user_id: str):
@@ -61,11 +61,15 @@ def generate_report(user_id: str):
     return latest_report, blank_report
 
 
-def get_newest_report(user_id: str):
+def get_latest_realtime_report(user_id: str):
     with get_session(write=False) as session:
         latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Realtime)
     return latest_report
 
+def get_latest_previous_report(user_id: str):
+    with get_session(write=False) as session:
+        latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Previous)
+    return latest_report
 
 def list_history_reports(user_id: str, page: int, page_size: int):
     with get_session(write=False) as session:
@@ -514,7 +518,7 @@ def generate_previous_report(user_id: str, email_list_to_process: List[EmailToPr
         previous_report_message = PreviousReportGenerateMessage(
             user_id=str(user_id),
             report_id=str(new_report.id),
-            previous_email_info=[]
+            task_info=[]
         )
 
         for email_to_process in email_list_to_process:
@@ -523,7 +527,7 @@ def generate_previous_report(user_id: str, email_list_to_process: List[EmailToPr
                 raise ResponseCode.InvalidParam.create_error(
                     f"account with id {email_to_process.account_id} does not exist"
                 )
-            previous_report_message.previous_email_info.append(PreviousEmailByAccount(
+            previous_report_message.task_info.append(TaskByAccount(
                 account_id=str(account.id),
                 number_of_email=email_to_process.number_of_email
             ))

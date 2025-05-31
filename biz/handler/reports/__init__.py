@@ -27,13 +27,29 @@ def report_to_resp_dict(report):
         "last_access_at": report.last_access_at,
     }
 
-
+# TODO: move the request rule to /realtime/newest
 @report_routes.route("/newest")
 @catch_error
 @user_auth()
 def get_newest_appending_report():
     resp = HTTPResponse(request.method, request.path)
-    report = report_ctrl.get_newest_report(request.ctx.user_id)
+    report = report_ctrl.get_latest_realtime_report(request.ctx.user_id)
+    if report:
+        resp.set_data({
+            "report": report_to_resp_dict(report),
+        })
+    else:
+        resp.set_data({
+            "report": None
+        })
+    return resp.return_with_log()
+
+@report_routes.route("/previous/latest")
+@catch_error
+@user_auth()
+def get_latest_previous_report():
+    resp = HTTPResponse(request.method, request.path)
+    report = report_ctrl.get_latest_previous_report(request.ctx.user_id)
     if report:
         resp.set_data({
             "report": report_to_resp_dict(report),
@@ -291,7 +307,7 @@ def _valid_email_list_to_process(v: List[report_ctrl.EmailToProcessByAccount]):
 
 
 class GeneratePreviousReportReq(BaseModel):
-    email_list_to_process: Annotated[
+    task_info: Annotated[
         List[report_ctrl.EmailToProcessByAccount], AfterValidator(_valid_email_list_to_process)]
 
 
@@ -301,13 +317,13 @@ class GeneratePreviousReportReq(BaseModel):
 @user_limiter.limit("5 per day")
 def generate_previous_report():
     resp = HTTPResponse(request.method, request.path)
+    # print(**request.get_json())
     req = GeneratePreviousReportReq(**request.get_json())
 
-    report = report_ctrl.generate_previous_report(request.ctx.user_id, req.email_list_to_process)
+    report = report_ctrl.generate_previous_report(request.ctx.user_id, req.task_info)
 
     resp.set_data({
         "report": report_to_resp_dict(report),
-        "message": "Previous report generation initiated successfully"
     })
     return resp.return_with_log()
 

@@ -142,9 +142,9 @@ class Report(Base):
 
     @classmethod
     def get_latest_by_user_id(cls, session: Session, user_id: Union[str, UUID], report_type: ReportType,
-                              for_update=False):
+                              status: ReportStatus = ReportStatus.Appending, for_update=False):
         q = (session.query(cls)
-             .filter_by(user_id=user_id, type=report_type, status=ReportStatus.Appending)
+             .filter_by(user_id=user_id, type=report_type, status=status)
              .order_by(cls.created_at.desc())
              )
         if for_update:
@@ -152,18 +152,19 @@ class Report(Base):
         return q.first()
 
     @classmethod
-    def count_by_user(cls, session: Session, user_id: Union[str, UUID]):
+    def count_by_user(cls, session: Session, user_id: Union[str, UUID], status: ReportStatus = ReportStatus.Finalized):
         return (
             session.query(cls)
-            .filter_by(user_id=user_id, deleted_at=None, status=ReportStatus.Finalized)
+            .filter_by(user_id=user_id, deleted_at=None, status=status)
             .count()
         )
 
     @classmethod
-    def list_by_user(cls, session: Session, user_id: Union[str, UUID], page: int, page_size: int):
+    def list_by_user(cls, session: Session, user_id: Union[str, UUID], page: int, page_size: int,
+                     status: ReportStatus = ReportStatus.Finalized):
         return (
             session.query(cls)
-            .filter_by(user_id=user_id, deleted_at=None, status=ReportStatus.Finalized)
+            .filter_by(user_id=user_id, deleted_at=None, status=status)
             .order_by(cls.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
