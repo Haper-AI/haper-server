@@ -7,7 +7,7 @@ from sqlalchemy.orm import make_transient
 from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.message_tracking import MessageTrackingRecord
-from biz.dal.report import Report
+from biz.dal.report import Report, ReportType
 from biz.dal.user import User, AccountProvider
 from biz.dal.user_setting import UserSetting
 from biz.handler.middleware import gen_jwt_auth
@@ -140,7 +140,7 @@ class TestDeleteUserSetting:
                 "subscription_id": "subscription_id_1",
             })
 
-            Report.add(session, user.id, {})
+            Report.add(session, user.id, ReportType.Realtime, {})
             make_transient(user)
 
         client.set_cookie(RuntimeEnv.Instance().JWT_AUTH_COOKIE_NAME, gen_jwt_auth(str(user.id)))

@@ -1,37 +1,20 @@
-from datetime import datetime
 from typing import List, Dict
 
 from biz.controller.gmail_util import GmailAPIClient
 from biz.dal.email import EmailSource
 from biz.dal.user import AccountProvider
 from biz.dal.message_tracking import MessageTrackingRecord, MessageTrackingStatus, MessageTrackingStatusExtraInfoKeys
-from biz.dal.report import Report, ReportStatus
+from biz.dal.report import Report, ReportType
 from biz.dal.user import Account
-from biz.dal.user_setting import UserSetting, DEFAULT_REPORT_MAX_TIME_DURATION
-from biz.model import ReportFieldName
+from biz.utils.report import ReportFieldName
 from biz.service.db import get_session
 from biz.service.aws.sqs import send_report_update_message
-from biz.model.report import report_update_message as rum_model
+from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.utils.logger import logger
-from biz.model.report import report as report_model
+from biz.controller.report_util import initialize_report
 
 
 # TODO: to avoid duplicate message process, use redis to cache processed message ids
-
-def initialize_report(messages_in_queue=None):
-    if messages_in_queue is None:
-        messages_in_queue = {}
-    return report_model.Report(
-        messages_in_queue=messages_in_queue,
-        summary=[],
-        content=report_model.ReportContent(
-            content_sources=[],
-            gmail=None,
-            outlook=None
-        ),
-    )
-
-
 def sync_user_gmail_message(email: str, history_id: int):
     with get_session(write=False) as session:
         account = Account.get_by_mail_and_provider(session, email, AccountProvider.Google)
@@ -68,7 +51,7 @@ def sync_user_gmail_message(email: str, history_id: int):
 
         # update report and send sqs message if new messages are found
         if new_gmail_message:
-            latest_report = Report.get_latest_by_user_id(session, account.user_id, for_update=True)
+            latest_report = Report.get_latest_by_user_id(session, account.user_id, ReportType.Realtime, for_update=True)
             if latest_report is None:  # if there is no ongoing report sequence
                 logger.warning("no ongoing report sequence for user %s", str(account.user_id))
                 return
@@ -119,7 +102,7 @@ def sync_user_outlook_message(message_ids_by_email: Dict[str, List[str]]):
                 continue
 
             # update report messages_in_queue field
-            latest_report = Report.get_latest_by_user_id(session, account.user_id, for_update=True)
+            latest_report = Report.get_latest_by_user_id(session, account.user_id, ReportType.Realtime, for_update=True)
             if latest_report is None:
                 logger.warning("no ongoing report sequence for user {}".format(account.user_id))
                 continue

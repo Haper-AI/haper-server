@@ -1,13 +1,12 @@
-import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Literal, List, Optional, Dict
+from typing import Literal, List, Optional, Dict, Annotated
 
 from googleapiclient.errors import HttpError
 from kiota_abstractions.api_error import APIError
 from langchain.chat_models import init_chat_model
 from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, model_validator, AfterValidator
 from sqlalchemy.orm import Session, make_transient
 
 from biz.controller.gmail_util import extract_gmail_info, GmailAPIClient
@@ -15,27 +14,29 @@ from biz.controller.outlook_util import extract_outlook_info, OutlookAPIClient
 from biz.dal.email import Email, EmailSource
 from biz.dal.report_batch_action import ReportBatchAction, BatchActionRunStatus, MessageActionResult
 from biz.dal.user import Account, User
-from biz.model import ReportFieldName
-from biz.model.report.report_batch_action_message import ReportBatchActionMessage
+from biz.utils.report import ReportFieldName
+from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
 from biz.service.db import get_session
-from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction
-from biz.service.aws.sqs import send_report_batch_action_message
+from biz.dal.report import Report, ReportStatus, MessageCategory, MessageAction, ReportType
+from biz.service.aws.sqs import send_report_batch_action_message, send_previous_report_generate_message
 from biz.utils.logger import logger
 from biz.utils.response import ResponseCode
-from biz.model.report import report as report_model
+from haper_script.schema_gen.python import report as report_model
+from haper_script.schema_gen.python.previous_report_generate_message import PreviousReportGenerateMessage, \
+    TaskByAccount
 
 
-def start_new_reporting_sequence(session: Session, user_id: str):
-    latest_report = Report.get_latest_by_user_id(session, user_id)
+def start_realtime_reporting_sequence(session: Session, user_id: str):
+    latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Realtime)
     if latest_report:
         raise ResponseCode.UnsupportedAction.create_error("already started reporting sequence")
 
     # create a new blank report
-    Report.add(session, user_id, {})
+    Report.add(session, user_id, ReportType.Realtime, {})
 
 
-def end_reporting_sequence(session: Session, user_id: str):
-    latest_report = Report.get_latest_by_user_id(session, user_id, for_update=True)
+def end_realtime_reporting_sequence(session: Session, user_id: str):
+    latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Realtime, for_update=True)
     if not latest_report:
         logger.warning("reporting sequence already ended")
         return
@@ -48,23 +49,27 @@ def end_reporting_sequence(session: Session, user_id: str):
 
 def generate_report(user_id: str):
     with get_session(write=True) as session:
-        latest_report = Report.get_latest_by_user_id(session, user_id, for_update=True)
+        latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Realtime, for_update=True)
         if not latest_report or not latest_report.content:
             raise ResponseCode.UnsupportedAction.create_error(
                 "latest report has no content, please wait for new messages")
         # finalize the report and create a new one
         Report.update(session, latest_report.id, status=ReportStatus.Finalized)
-        blank_report = Report.add(session, user_id, {})
+        blank_report = Report.add(session, user_id, ReportType.Realtime, {})
         make_transient(latest_report), make_transient(blank_report)
 
     return latest_report, blank_report
 
 
-def get_newest_report(user_id: str):
+def get_latest_realtime_report(user_id: str):
     with get_session(write=False) as session:
-        latest_report = Report.get_latest_by_user_id(session, user_id)
+        latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Realtime)
     return latest_report
 
+def get_latest_previous_report(user_id: str):
+    with get_session(write=False) as session:
+        latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Previous)
+    return latest_report
 
 def list_history_reports(user_id: str, page: int, page_size: int):
     with get_session(write=False) as session:
@@ -482,3 +487,54 @@ def get_message_content(user_id: str, report_id: str, source: str, account_id: s
         raise ResponseCode.UnsupportedAction.create_error("unknown source")
 
     return corresponding_mail_item, extracted_email
+
+
+def is_valid_number_of_email(v: int):
+    if v <= 0:
+        raise ValueError("number_of_email must be greater than 0")
+    if v > 100:
+        raise ValueError("number_of_email must be less than or equal to 100")
+    return v
+
+
+class EmailToProcessByAccount(BaseModel):
+    account_id: str
+    number_of_email: Annotated[int, AfterValidator(is_valid_number_of_email)]
+
+
+def generate_previous_report(user_id: str, email_list_to_process: List[EmailToProcessByAccount]):
+    with get_session(write=True) as session:
+        # Check if user has an active appending previous report
+        latest_report = Report.get_latest_by_user_id(session, user_id, ReportType.Previous)
+
+        if latest_report:
+            raise ResponseCode.UnsupportedAction.create_error(
+                "there already exists an task for generating report on previous emails")
+
+        # Create a new report with the previous email information
+        new_report = Report.add(session, user_id, ReportType.Previous, {})
+
+        # send sqs message to generate previous report
+        previous_report_message = PreviousReportGenerateMessage(
+            user_id=str(user_id),
+            report_id=str(new_report.id),
+            task_info=[]
+        )
+
+        for email_to_process in email_list_to_process:
+            account = Account.get_by_id(session, email_to_process.account_id)
+            if not account:
+                raise ResponseCode.InvalidParam.create_error(
+                    f"account with id {email_to_process.account_id} does not exist"
+                )
+            previous_report_message.task_info.append(TaskByAccount(
+                account_id=str(account.id),
+                number_of_email=email_to_process.number_of_email
+            ))
+
+        send_previous_report_generate_message(previous_report_message, str(new_report.id))
+        logger.info(f"send sqs message for generating previous report for user {user_id}")
+
+        make_transient(new_report)
+
+    return new_report

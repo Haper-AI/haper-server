@@ -9,12 +9,12 @@ from biz.controller.gmail_util import GmailAPIClient
 from biz.controller.outlook_util import OutlookAPIClient
 from biz.dal.email import EmailSource
 from biz.dal.user import AccountProvider
-from biz.dal.report import MessageAction, MessageCategory, Report, ReportStatus
+from biz.dal.report import MessageAction, MessageCategory, Report, ReportStatus, ReportType
 from biz.dal.report_batch_action import ReportBatchAction
 from biz.dal.user import User, Account
 from biz.service.db import get_session
-from biz.model.report import report as report_model
-from biz.model.report.report_batch_action_message import ReportBatchActionMessage
+from haper_script.schema_gen.python import report as report_model
+from haper_script.schema_gen.python.report_batch_action_message import ReportBatchActionMessage
 from tests import generate_random_string, generate_random_gmail, generate_random_outlook_email
 
 
@@ -191,7 +191,7 @@ def new_user_report():
                 ]
             )
         )
-        report = Report.add(session, user.id, report_obj.to_dict())
+        report = Report.add(session, user.id, ReportType.Realtime, report_obj.to_dict())
         Report.update(session, user.id, status=ReportStatus.Finalized)
 
         batch_run = ReportBatchAction.add(session, report.id, 6)

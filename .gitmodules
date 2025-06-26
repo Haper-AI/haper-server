@@ -1,0 +1,3 @@
+[submodule "haper_script"]
+	path = haper_script
+	url = git@github.com:Haper-IO/haper-script.git

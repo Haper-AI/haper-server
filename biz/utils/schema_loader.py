@@ -3,5 +3,5 @@ import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-with open(os.path.join(SCRIPT_DIR, '..', 'model', 'report', 'schema', 'rich_text.json')) as f:
+with open(os.path.join(SCRIPT_DIR, '..', '..', 'haper_script', 'schema','rich_text.json')) as f:
     rich_text_schema = json.dumps(json.load(f))

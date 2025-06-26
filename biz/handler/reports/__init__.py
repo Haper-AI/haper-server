@@ -1,14 +1,14 @@
 import json
 import time
-from typing import Optional, List
+from typing import Optional, List, Annotated
 
 from flask import Blueprint, request, Response
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, PositiveInt, AfterValidator
 
 from biz.controller import report as report_ctrl
 from biz.dal.report_batch_action import BatchActionRunStatus
 from biz.handler.middleware import catch_error, user_auth
-from biz.model import ReportFieldName
+from biz.utils.report import ReportFieldName
 from biz.service.rate_limiter import user_limiter
 from biz.utils.logger import logger
 from biz.utils.response import HTTPResponse
@@ -19,6 +19,7 @@ report_routes = Blueprint("report_api", __name__, url_prefix="/report")
 def report_to_resp_dict(report):
     return {
         "id": str(report.id),
+        "type": report.type,
         "content": report.content,
         "status": report.status,
         "created_at": report.created_at,
@@ -26,13 +27,29 @@ def report_to_resp_dict(report):
         "last_access_at": report.last_access_at,
     }
 
-
+# TODO: move the request rule to /realtime/newest
 @report_routes.route("/newest")
 @catch_error
 @user_auth()
 def get_newest_appending_report():
     resp = HTTPResponse(request.method, request.path)
-    report = report_ctrl.get_newest_report(request.ctx.user_id)
+    report = report_ctrl.get_latest_realtime_report(request.ctx.user_id)
+    if report:
+        resp.set_data({
+            "report": report_to_resp_dict(report),
+        })
+    else:
+        resp.set_data({
+            "report": None
+        })
+    return resp.return_with_log()
+
+@report_routes.route("/previous/newest")
+@catch_error
+@user_auth()
+def get_latest_previous_report():
+    resp = HTTPResponse(request.method, request.path)
+    report = report_ctrl.get_latest_previous_report(request.ctx.user_id)
     if report:
         resp.set_data({
             "report": report_to_resp_dict(report),
@@ -44,6 +61,7 @@ def get_newest_appending_report():
     return resp.return_with_log()
 
 
+# TODO: move the request rule to /realtime/generate
 @report_routes.route("/generate", methods=["POST"])
 @catch_error
 @user_auth()
@@ -280,5 +298,34 @@ def get_message_content(report_id: str):
         }
     })
     return resp.return_with_log()
+
+
+def _valid_email_list_to_process(v: List[report_ctrl.EmailToProcessByAccount]):
+    if len(v) == 0:
+        raise ValueError("email_list_to_process must not be empty")
+    return v
+
+
+class GeneratePreviousReportReq(BaseModel):
+    task_info: Annotated[
+        List[report_ctrl.EmailToProcessByAccount], AfterValidator(_valid_email_list_to_process)]
+
+
+@report_routes.route("/previous/generate", methods=["POST"])
+@catch_error
+@user_auth()
+@user_limiter.limit("5 per day")
+def generate_previous_report():
+    resp = HTTPResponse(request.method, request.path)
+    # print(**request.get_json())
+    req = GeneratePreviousReportReq(**request.get_json())
+
+    report = report_ctrl.generate_previous_report(request.ctx.user_id, req.task_info)
+
+    resp.set_data({
+        "report": report_to_resp_dict(report),
+    })
+    return resp.return_with_log()
+
 
 __all__ = ['report_routes']

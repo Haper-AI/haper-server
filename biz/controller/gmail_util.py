@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from biz.controller.mail_util_base import ExtractedMail, EmailBodyType
 from biz.utils import split_email_str, extract_visible_text_from_email
 from biz.utils.env import RuntimeEnv
-from biz.model.report import report_update_message as rum_model
+from haper_script.schema_gen.python import report_update_message as rum_model
 from biz.utils.logger import logger
 
 
@@ -163,6 +163,30 @@ class GmailAPIClient:
             has_next_page = has_next_page and page_token is not None
 
         return new_gmail_message
+
+    def list_emails(self, query: str = "", page_token: str = None, max_results: int = 100) -> List[RawGmailInfo]:
+        raw_emails = []
+        while True:
+            response = self.client.users().messages().list(
+                userId='me',
+                q=query,
+                pageToken=page_token,
+                maxResults=max_results - len(raw_emails)
+            ).execute()
+
+            for message in response.get('messages', []):
+                message_id = message['id']
+                thread_id = message['threadId']
+                raw_email = self.get_email(message_id)
+                raw_emails.append(RawGmailInfo(message_id, thread_id, raw_email))
+                if len(raw_emails) >= max_results:
+                    return raw_emails
+
+            page_token = response.get("nextPageToken")
+            if not page_token or len(raw_emails) >= max_results:
+                break
+
+        return raw_emails
 
     def get_email(self, message_id: str):
         return self.client.users().messages().get(userId="me", id=message_id).execute()
